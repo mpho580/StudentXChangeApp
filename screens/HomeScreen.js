@@ -1,18 +1,24 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Image,
   Dimensions,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // Expo already includes this
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { API_BASE_URL } from '../config';
 
 const { width } = Dimensions.get('window');
 
-// Mock data (replace with real data later)
 const categories = [
   { id: 1, name: 'Textbooks', icon: 'book' },
   { id: 2, name: 'Electronics', icon: 'laptop-outline' },
@@ -22,39 +28,109 @@ const categories = [
   { id: 6, name: 'Services', icon: 'briefcase' },
 ];
 
-const listings = [
-  {
-    id: 1,
-    title: 'Calculus Textbook 8th Edition',
-    description: 'Barely used, no highlights. Perfect for MATH 201.',
-    price: 45.0,
-    item_condition: 'Like New',
-    category_name: 'Textbooks',
-    image_path: 'https://via.placeholder.com/300x180?text=Textbook',
-    seller_name: 'Alex M.',
-    created_at: '2026-09-10',
-  },
-  {
-    id: 2,
-    title: 'MacBook Air M1 2020',
-    description: '8GB RAM, 256GB SSD. Battery health 92%.',
-    price: 520.0,
-    item_condition: 'Good',
-    category_name: 'Electronics',
-    image_path: 'https://via.placeholder.com/300x180?text=Laptop',
-    seller_name: 'Jordan T.',
-    created_at: '2026-09-09',
-  },
-];
-
-const isLoggedIn = false; // Replace with your real auth state
-
-const formatPrice = (price) => `$${Number(price).toFixed(2)}`;
+const formatPrice = (price) => `R ${Number(price).toFixed(2)}`;
 
 export default function HomeScreen({ navigation }) {
+  const [listings, setListings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [user, setUser] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const loadUser = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('user');
+      if (stored) setUser(JSON.parse(stored));
+      else setUser(null);
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const fetchListings = async (isRefresh = false, query = search) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const url = query.trim()
+        ? `${API_BASE_URL}/listings.php?search=${encodeURIComponent(query.trim())}`
+        : `${API_BASE_URL}/listings.php`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.success) {
+        setListings(data.listings || []);
+      } else {
+        setListings([]);
+      }
+    } catch (err) {
+      Alert.alert(
+        'Connection error',
+        'Could not load listings. Check that XAMPP is running and API_BASE_URL is correct.'
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUser();
+      fetchListings();
+    }, [])
+  );
+
+  const handleSearch = () => {
+    fetchListings(false, search);
+  };
+
+  const clearSearch = () => {
+    setSearch('');
+    fetchListings(false, '');
+  };
+
+  const isLoggedIn = !!user;
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* ===== HERO SECTION ===== */}
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => fetchListings(true)}
+          colors={['#0d6efd']}
+        />
+      }
+    >
+      {/* ===== SEARCH BAR ===== */}
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={20} color="#6c757d" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search textbooks, laptops, furniture..."
+          placeholderTextColor="#adb5bd"
+          value={search}
+          onChangeText={setSearch}
+          onSubmitEditing={handleSearch}
+          returnKeyType="search"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="close-circle" size={20} color="#adb5bd" />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
+          <Text style={styles.searchBtnText}>Search</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ===== HERO ===== */}
       <View style={styles.hero}>
         <Ionicons name="flash" size={32} color="#ffc107" style={{ marginBottom: 8 }} />
         <Text style={styles.heroTitle}>Campus Trading Made Effortless</Text>
@@ -69,6 +145,7 @@ export default function HomeScreen({ navigation }) {
           onPress={() =>
             navigation.navigate(isLoggedIn ? 'CreateListing' : 'Register')
           }
+          activeOpacity={0.85}
         >
           <Ionicons
             name={isLoggedIn ? 'add-circle' : 'person-add'}
@@ -84,7 +161,7 @@ export default function HomeScreen({ navigation }) {
 
       {/* ===== CATEGORIES ===== */}
       <Text style={styles.sectionTitle}>
-        <Ionicons name="grid" size={20} color="#0d6efd" /> Select Campus Category
+        <Ionicons name="grid" size={18} color="#0d6efd" /> Select Campus Category
       </Text>
 
       <View style={styles.categoriesGrid}>
@@ -92,7 +169,9 @@ export default function HomeScreen({ navigation }) {
           <TouchableOpacity
             key={cat.id}
             style={styles.categoryCard}
-            onPress={() => navigation.navigate('Search', { category_id: cat.id })}
+            onPress={() =>
+              navigation.navigate('Search', { category_id: cat.id })
+            }
             activeOpacity={0.7}
           >
             <Ionicons name={cat.icon} size={28} color="#0d6efd" />
@@ -103,10 +182,11 @@ export default function HomeScreen({ navigation }) {
         ))}
       </View>
 
-      {/* ===== RECENT LISTINGS HEADER ===== */}
+      {/* ===== RECENT / SEARCH RESULTS HEADER ===== */}
       <View style={styles.listingsHeader}>
-        <Text style={styles.sectionTitle}>
-          <Ionicons name="time" size={20} color="#0d6efd" /> Recently Uploaded Items
+        <Text style={[styles.sectionTitle, { marginBottom: 0, marginTop: 0 }]}>
+          <Ionicons name="time" size={18} color="#0d6efd" />{' '}
+          {search.trim() ? 'Search Results' : 'Recently Uploaded Items'}
         </Text>
         <TouchableOpacity onPress={() => navigation.navigate('Search')}>
           <Text style={styles.browseAll}>Browse All</Text>
@@ -114,11 +194,15 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* ===== LISTINGS ===== */}
-      {listings.length === 0 ? (
+      {loading ? (
+        <ActivityIndicator size="large" color="#0d6efd" style={{ marginTop: 40 }} />
+      ) : listings.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="storefront-outline" size={64} color="#adb5bd" />
           <Text style={styles.emptyText}>
-            No items listed yet. Be the first to start the campus circular economy!
+            {search.trim()
+              ? `No results for "${search.trim()}". Try another search.`
+              : 'No items listed yet. Be the first to start the campus circular economy!'}
           </Text>
         </View>
       ) : (
@@ -127,22 +211,25 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity
               key={item.id}
               style={styles.productCard}
-              onPress={() => navigation.navigate('ListingDetails', { id: item.id })}
+              onPress={() =>
+                navigation.navigate('ListingDetails', { id: item.id })
+              }
               activeOpacity={0.85}
             >
-              {/* Condition Badge */}
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{item.item_condition}</Text>
               </View>
 
-              {/* Image */}
               <Image
-                source={{ uri: item.image_path }}
+                source={{
+                  uri:
+                    item.image_path ||
+                    'https://via.placeholder.com/300x180?text=No+Image',
+                }}
                 style={styles.productImage}
                 resizeMode="cover"
               />
 
-              {/* Content */}
               <View style={styles.productBody}>
                 <Text style={styles.categoryLabel}>{item.category_name}</Text>
                 <Text style={styles.productTitle} numberOfLines={1}>
@@ -155,14 +242,13 @@ export default function HomeScreen({ navigation }) {
                 <View style={styles.priceRow}>
                   <Text style={styles.price}>{formatPrice(item.price)}</Text>
                   <View style={styles.viewButton}>
-                    <Text style={styles.viewButtonText}>View</Text>
+                    <Text style={styles.viewButtonText}>View Details</Text>
                   </View>
                 </View>
               </View>
 
-              {/* Footer */}
               <View style={styles.productFooter}>
-                <Text style={styles.footerText}>
+                <Text style={styles.footerText} numberOfLines={1}>
                   <Ionicons name="person-outline" size={12} /> {item.seller_name}
                 </Text>
                 <Text style={styles.footerText}>
@@ -187,6 +273,48 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+
+  // Search bar
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 4,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#212529',
+    paddingVertical: 10,
+  },
+  searchBtn: {
+    backgroundColor: '#0d6efd',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginLeft: 8,
+  },
+  searchBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
 
   // Hero
@@ -225,9 +353,8 @@ const styles = StyleSheet.create({
     color: '#000',
   },
 
-  // Section Title
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: '#212529',
     marginHorizontal: 16,
@@ -235,12 +362,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  // Categories
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 12,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   categoryCard: {
     width: (width - 48) / 3,
@@ -262,13 +388,12 @@ const styles = StyleSheet.create({
     color: '#212529',
   },
 
-  // Listings Header
   listingsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginRight: 16,
-    marginBottom: 4,
+    marginHorizontal: 16,
+    marginBottom: 12,
   },
   browseAll: {
     color: '#0d6efd',
@@ -276,7 +401,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // Empty State
   emptyState: {
     alignItems: 'center',
     paddingVertical: 50,
@@ -289,7 +413,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
   },
 
-  // Listings Grid
   listingsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -325,6 +448,7 @@ const styles = StyleSheet.create({
   productImage: {
     width: '100%',
     height: 130,
+    backgroundColor: '#e9ecef',
   },
   productBody: {
     padding: 12,
@@ -356,19 +480,19 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   price: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#198754',
   },
   viewButton: {
     backgroundColor: '#0d6efd',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
   },
   viewButtonText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   productFooter: {
@@ -380,5 +504,6 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 11,
     color: '#6c757d',
+    maxWidth: '48%',
   },
 });
