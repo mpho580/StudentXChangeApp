@@ -157,6 +157,17 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
+        {user?.role === 'admin' && (
+            <TouchableOpacity
+                style={styles.linkBtn}
+                onPress={() => navigation.navigate('Admin')}
+            >
+                <Ionicons name="shield-checkmark" size={20} color="#0d6efd" />
+                <Text style={styles.linkBtnText}>Admin Portal</Text>
+                <Ionicons name="chevron-forward" size={10} color="#adb5bd" />
+            </TouchableOpacity>
+            )}
+
         {/* Form card */}
         <View style={styles.card}>
           <Text style={styles.label}>Name</Text>

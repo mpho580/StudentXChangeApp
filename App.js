@@ -10,6 +10,7 @@ import MyListingsScreen from './screens/MyListingsScreen';
 import CreateListingScreen from './screens/CreateListingScreen';
 import SearchScreen from './screens/SearchScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import AdminScreen from './screens/AdminScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -30,6 +31,7 @@ export default function App() {
         <Stack.Screen name="CreateListing" component={CreateListingScreen} />
         <Stack.Screen name="Search" component={SearchScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Admin" component={AdminScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
