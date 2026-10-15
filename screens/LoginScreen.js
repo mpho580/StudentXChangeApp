@@ -79,7 +79,7 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.label}>Email or student number</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. 21908472 or studentnum@richfield.ac.za"
+            placeholder="Student number"
             placeholderTextColor="#adb5bd"
             value={loginId}
             onChangeText={setLoginId}
