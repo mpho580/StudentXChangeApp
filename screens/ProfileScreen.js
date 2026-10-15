@@ -10,10 +10,12 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { API_BASE_URL } from '../config';
 
 export default function ProfileScreen({ navigation }) {
@@ -21,6 +23,7 @@ export default function ProfileScreen({ navigation }) {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const [phone, setPhone] = useState('');
+  const [localImage, setLocalImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -38,11 +41,9 @@ export default function ProfileScreen({ navigation }) {
       setName(localUser.name || '');
       setSurname(localUser.surname || '');
       setPhone(localUser.phone || '');
+      setLocalImage(null);
 
-      // Refresh from server
-      const res = await fetch(
-        `${API_BASE_URL}/profile.php?user_id=${localUser.id}`
-      );
+      const res = await fetch(`${API_BASE_URL}/profile.php?user_id=${localUser.id}`);
       const data = await res.json();
 
       if (data.success && data.user) {
@@ -53,7 +54,6 @@ export default function ProfileScreen({ navigation }) {
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
       }
     } catch (e) {
-      // Keep local data if offline
       console.log(e);
     } finally {
       setLoading(false);
@@ -66,33 +66,89 @@ export default function ProfileScreen({ navigation }) {
     }, [])
   );
 
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        'Permission needed',
+        'Please allow photo library access to set a profile picture.'
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    const uri = asset.uri;
+    const ext = (uri.split('.').pop() || 'jpg').toLowerCase();
+    const mime =
+      ext === 'png' ? 'image/png' :
+      ext === 'webp' ? 'image/webp' :
+      'image/jpeg';
+
+    setLocalImage({
+      uri,
+      name: `avatar.${ext === 'jpeg' ? 'jpg' : ext}`,
+      type: mime,
+    });
+  };
+
   const handleSave = async () => {
     if (!name.trim() || !surname.trim()) {
-      Alert.alert('Missing info', 'Name and surname are required.');
+      Alert.alert('Missing info', 'Your name and surname are required.');
       return;
     }
 
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/profile.php`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          name: name.trim(),
-          surname: surname.trim(),
-          phone: phone.trim(),
-        }),
-      });
+      let data;
 
-      const data = await res.json();
+      if (localImage) {
+        const form = new FormData();
+        form.append('user_id', String(user.id));
+        form.append('name', name.trim());
+        form.append('surname', surname.trim());
+        form.append('phone', phone.trim());
+        form.append('profile_picture', {
+          uri: localImage.uri,
+          name: localImage.name,
+          type: localImage.type,
+        });
+
+        const res = await fetch(`${API_BASE_URL}/profile.php`, {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+          body: form,
+        });
+        data = await res.json();
+      } else {
+        const res = await fetch(`${API_BASE_URL}/profile.php`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user.id,
+            name: name.trim(),
+            surname: surname.trim(),
+            phone: phone.trim(),
+          }),
+        });
+        data = await res.json();
+      }
 
       if (data.success) {
         setUser(data.user);
+        setLocalImage(null);
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         Alert.alert('Success', 'Your profile was updated successfully.');
       } else {
-        Alert.alert('Failed', data.message || 'Could not update profile.');
+        Alert.alert('Failed', data.message || 'We could not update your profile.');
       }
     } catch (e) {
       Alert.alert('Connection error', 'Could not reach the server.');
@@ -123,9 +179,8 @@ export default function ProfileScreen({ navigation }) {
     );
   }
 
-  const initials = (
-    (name?.[0] || '') + (surname?.[0] || '')
-  ).toUpperCase() || '?';
+  const initials = ((name?.[0] || '') + (surname?.[0] || '')).toUpperCase() || '?';
+  const avatarUri = localImage?.uri || user.profile_picture || null;
 
   const memberSince = user.created_at
     ? new Date(user.created_at).toLocaleDateString('en-US', {
@@ -144,40 +199,67 @@ export default function ProfileScreen({ navigation }) {
         contentContainerStyle={{ paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
+        {/* ===== HEADER (matches profile.php blue banner) ===== */}
         <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+          <TouchableOpacity onPress={pickImage} activeOpacity={0.85}>
+            <View style={styles.headerAvatar}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.headerAvatarImage} />
+              ) : (
+                <Text style={styles.headerAvatarText}>{initials}</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+
           <View style={styles.headerText}>
             <Text style={styles.headerName}>
               {`${name} ${surname}`.trim() || 'Student'}
             </Text>
             <Text style={styles.headerSub}>Student Marketplace Profile</Text>
+
+            {user?.role === 'admin' && (
+              <TouchableOpacity
+                style={styles.adminBtn}
+                onPress={() => navigation.navigate('Admin')}
+              >
+                <Ionicons name="shield-checkmark" size={16} color="#212529" />
+                <Text style={styles.adminBtnText}>Go to Admin Portal</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {user?.role === 'admin' && (
-            <TouchableOpacity
-                style={styles.linkBtn}
-                onPress={() => navigation.navigate('Admin')}
-            >
-                <Ionicons name="shield-checkmark" size={20} color="#0d6efd" />
-                <Text style={styles.linkBtnText}>Admin Portal</Text>
-                <Ionicons name="chevron-forward" size={10} color="#adb5bd" />
-            </TouchableOpacity>
-            )}
-
-        {/* Form card */}
+        {/* ===== FORM CARD ===== */}
         <View style={styles.card}>
+          {/* Profile picture picker (like website form) */}
+          <Text style={styles.label}>Profile Picture</Text>
+          <View style={styles.pictureRow}>
+            <View style={styles.formAvatar}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.formAvatarImage} />
+              ) : (
+                <Text style={styles.formAvatarText}>{initials}</Text>
+              )}
+            </View>
+            <View style={styles.pictureMeta}>
+              <TouchableOpacity style={styles.chooseBtn} onPress={pickImage}>
+                <Ionicons name="image-outline" size={18} color="#0d6efd" />
+                <Text style={styles.chooseBtnText}>Choose file</Text>
+              </TouchableOpacity>
+              <Text style={styles.formText}>JPG, PNG or WEBP. Maximum size: 2MB.</Text>
+            </View>
+          </View>
+
+          {/* Name */}
           <Text style={styles.label}>Name</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="First name"
+            placeholder="Name"
           />
 
+          {/* Surname */}
           <Text style={styles.label}>Surname</Text>
           <TextInput
             style={styles.input}
@@ -186,6 +268,7 @@ export default function ProfileScreen({ navigation }) {
             placeholder="Surname"
           />
 
+          {/* Phone */}
           <Text style={styles.label}>Phone Number</Text>
           <TextInput
             style={styles.input}
@@ -195,6 +278,7 @@ export default function ProfileScreen({ navigation }) {
             keyboardType="phone-pad"
           />
 
+          {/* Student Number (readonly) */}
           <Text style={styles.label}>Student Number</Text>
           <TextInput
             style={[styles.input, styles.readonly]}
@@ -202,6 +286,7 @@ export default function ProfileScreen({ navigation }) {
             editable={false}
           />
 
+          {/* Email (readonly) */}
           <Text style={styles.label}>Email Address</Text>
           <TextInput
             style={[styles.input, styles.readonly]}
@@ -209,6 +294,7 @@ export default function ProfileScreen({ navigation }) {
             editable={false}
           />
 
+          {/* Footer: member since + save */}
           <View style={styles.footerRow}>
             <Text style={styles.memberSince}>
               {memberSince ? `Member since ${memberSince}` : ''}
@@ -222,13 +308,16 @@ export default function ProfileScreen({ navigation }) {
               {saving ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.saveBtnText}>Save Changes</Text>
+                <View style={styles.saveInner}>
+                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  <Text style={styles.saveBtnText}>Save Changes</Text>
+                </View>
               )}
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Quick links */}
+        {/* Mobile-only extras (not on website page) */}
         <TouchableOpacity
           style={styles.linkBtn}
           onPress={() => navigation.navigate('MyListings')}
@@ -238,10 +327,7 @@ export default function ProfileScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={20} color="#adb5bd" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.linkBtn, styles.logoutBtn]}
-          onPress={handleLogout}
-        >
+        <TouchableOpacity style={[styles.linkBtn, styles.logoutBtn]} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#dc3545" />
           <Text style={[styles.linkBtnText, { color: '#dc3545' }]}>Log out</Text>
         </TouchableOpacity>
@@ -251,39 +337,38 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
   },
+
+  // Header – same as website bg-primary block
   header: {
     backgroundColor: '#0d6efd',
     padding: 24,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  headerAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#ffc107',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
+    overflow: 'hidden',
   },
-  avatarText: {
+  headerAvatarImage: { width: 80, height: 80 },
+  headerAvatarText: {
     fontSize: 26,
     fontWeight: '800',
     color: '#212529',
   },
-  headerText: {
-    flex: 1,
-  },
+  headerText: { flex: 1 },
   headerName: {
     fontSize: 22,
     fontWeight: '800',
@@ -294,6 +379,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 14,
   },
+  adminBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#ffc107',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 10,
+    gap: 6,
+  },
+  adminBtnText: {
+    color: '#212529',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // Card
   card: {
     backgroundColor: '#fff',
     margin: 16,
@@ -306,11 +409,56 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#212529',
     marginBottom: 6,
-    marginTop: 10,
+    marginTop: 12,
+  },
+  pictureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 4,
+  },
+  formAvatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#ffc107',
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  formAvatarImage: { width: 96, height: 96 },
+  formAvatarText: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#212529',
+  },
+  pictureMeta: { flex: 1 },
+  chooseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#0d6efd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignSelf: 'flex-start',
+  },
+  chooseBtnText: {
+    color: '#0d6efd',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  formText: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginTop: 8,
   },
   input: {
     borderWidth: 1,
@@ -344,14 +492,21 @@ const styles = StyleSheet.create({
   saveBtn: {
     backgroundColor: '#0d6efd',
     borderRadius: 8,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  saveInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   saveBtnText: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 14,
   },
+
+  // Mobile extras
   linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -369,7 +524,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#212529',
   },
-  logoutBtn: {
-    marginTop: 4,
-  },
+  logoutBtn: { marginTop: 4 },
 });
