@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fetchUnreadCount } from '../utils/unread';
 
 const ITEMS = [
   { key: 'home', label: 'Home', icon: 'home', iconOutline: 'home-outline', route: 'Home' },
   { key: 'search', label: 'Search', icon: 'search', iconOutline: 'search-outline', route: 'Search' },
   { key: 'post', label: 'Post', icon: 'add-circle', iconOutline: 'add-circle-outline', route: 'CreateListing' },
+  { key: 'inbox', label: 'Inbox', icon: 'chatbubbles', iconOutline: 'chatbubbles-outline', route: 'Inbox' },
   { key: 'profile', label: 'Profile', icon: 'person', iconOutline: 'person-outline', route: 'Profile' },
 ];
 
@@ -37,6 +39,8 @@ export default function BottomNavBar({ navigation, active }) {
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {ITEMS.map((item) => {
         const isActive = active === item.key;
+        const showBadge = item.key === 'inbox' && unread > 0 && !isActive;
+
         return (
           <TouchableOpacity
             key={item.key}
@@ -78,4 +82,17 @@ const styles = StyleSheet.create({
   item: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 11, fontWeight: '600', color: '#6c757d', marginTop: 2 },
   labelActive: { color: '#0d6efd' },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#dc3545',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 });
