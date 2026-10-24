@@ -105,6 +105,10 @@ export default function MyListingsScreen({ navigation }) {
 
   const handleToggleStatus = async (item) => {
     const newStatus = item.status === 'Sold' ? 'Available' : 'Sold';
+    if (!user?.id) {
+      Alert.alert('Error', 'User not loaded. Please try again.');
+      return;
+    }
 
     try {
       const res = await fetch(`${API_BASE_URL}/update_status.php`, {
@@ -116,17 +120,24 @@ export default function MyListingsScreen({ navigation }) {
           status: newStatus,
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        Alert.alert('Server error', text.slice(0, 300) || `HTTP ${res.status}`);
+        return;
+      }
 
       if (data.success) {
-        load();
+        load(); // refresh the list so the badge updates
       } else {
         Alert.alert('Failed', data.message || 'Could not update status.');
       }
     } catch (e) {
-      Alert.alert('Error', 'Could not update status.');
+      Alert.alert('Error', String(e?.message || e));
     }
-  };
+};
 
   if (loading && listings.length === 0) {
     return (
