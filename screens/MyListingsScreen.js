@@ -13,6 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
+import BottomNavBar from '../components/BottomNavBar';
 
 export default function MyListingsScreen({ navigation }) {
   const [listings, setListings] = useState([]);
@@ -114,142 +115,151 @@ export default function MyListingsScreen({ navigation }) {
 
   if (loading && listings.length === 0) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0d6efd" />
+      <View style={styles.screen}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#0d6efd" />
+        </View>
+        <BottomNavBar navigation={navigation} active="profile" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.pageTitle}>My Listings</Text>
-          <Text style={styles.pageSub}>Items you have published for sale.</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => navigation.navigate('CreateListing')}
-        >
-          <Text style={styles.addBtnText}>+ Sell an item</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={listings}
-        keyExtractor={(item) => String(item.id)}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} />
-        }
-        contentContainerStyle={{ paddingBottom: 40 }}
-        ListEmptyComponent={
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>📦</Text>
-            <Text style={styles.emptyTitle}>No listings yet</Text>
-            <Text style={styles.emptyText}>
-              Listings appear here when they are published from your account.
-            </Text>
-            <TouchableOpacity
-              style={styles.emptyBtn}
-              onPress={() => navigation.navigate('CreateListing')}
-            >
-              <Text style={styles.emptyBtnText}>Create your first listing</Text>
-            </TouchableOpacity>
+    <View style={styles.screen}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.pageTitle}>My Listings</Text>
+            <Text style={styles.pageSub}>Items you have published for sale.</Text>
           </View>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            {/* Image */}
-            {item.image_path ? (
-              <Image
-                source={{ uri: item.image_path }}
-                style={styles.image}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={[styles.image, styles.imagePlaceholder]}>
-                <Text style={{ color: '#adb5bd' }}>No image</Text>
-              </View>
-            )}
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => navigation.navigate('CreateListing')}
+          >
+            <Text style={styles.addBtnText}>+ Sell an item</Text>
+          </TouchableOpacity>
+        </View>
 
-            <View style={styles.cardBody}>
-              <Text style={styles.title} numberOfLines={2}>
-                {item.title}
+        <FlatList
+          data={listings}
+          keyExtractor={(item) => String(item.id)}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={load} />
+          }
+          contentContainerStyle={{ paddingBottom: 16 }}
+          ListEmptyComponent={
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyIcon}>📦</Text>
+              <Text style={styles.emptyTitle}>No listings yet</Text>
+              <Text style={styles.emptyText}>
+                Listings appear here when they are published from your account.
               </Text>
-
-              <Text style={styles.price}>
-                R {Number(item.price).toFixed(2)}
-              </Text>
-
-              <Text style={styles.meta}>{item.category_name}</Text>
-
-              {/* Status badge */}
-              <View
-                style={[
-                  styles.badge,
-                  item.status === 'Sold' ? styles.badgeSold : styles.badgeAvailable,
-                ]}
-              >
-                <Text style={styles.badgeText}>{item.status || 'Available'}</Text>
-              </View>
-
-              {/* Action buttons */}
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  style={styles.btnPrimary}
-                  onPress={() =>
-                    navigation.navigate('ListingDetails', { id: item.id })
-                  }
-                >
-                  <Text style={styles.btnPrimaryText}>View</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.btnWarning}
-                  onPress={() =>
-                    navigation.navigate('EditListing', { id: item.id })
-                  }
-                >
-                  <Text style={styles.btnWarningText}>Edit</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.btnDanger}
-                  onPress={() => handleDelete(item.id)}
-                >
-                  <Text style={styles.btnDangerText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Mark Sold / Available */}
               <TouchableOpacity
-                style={[
-                  styles.statusBtn,
-                  item.status === 'Sold'
-                    ? styles.statusBtnAvailable
-                    : styles.statusBtnSold,
-                ]}
-                onPress={() => handleToggleStatus(item)}
+                style={styles.emptyBtn}
+                onPress={() => navigation.navigate('CreateListing')}
               >
-                <Text
-                  style={[
-                    styles.statusBtnText,
-                    item.status === 'Sold' && { color: '#198754' },
-                  ]}
-                >
-                  {item.status === 'Sold' ? 'Mark Available' : 'Mark as Sold'}
-                </Text>
+                <Text style={styles.emptyBtnText}>Create your first listing</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
-      />
+          }
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              {/* Image */}
+              {item.image_path ? (
+                <Image
+                  source={{ uri: item.image_path }}
+                  style={styles.image}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.image, styles.imagePlaceholder]}>
+                  <Text style={{ color: '#adb5bd' }}>No image</Text>
+                </View>
+              )}
+
+              <View style={styles.cardBody}>
+                <Text style={styles.title} numberOfLines={2}>
+                  {item.title}
+                </Text>
+
+                <Text style={styles.price}>
+                  R {Number(item.price).toFixed(2)}
+                </Text>
+
+                <Text style={styles.meta}>{item.category_name}</Text>
+
+                {/* Status badge */}
+                <View
+                  style={[
+                    styles.badge,
+                    item.status === 'Sold' ? styles.badgeSold : styles.badgeAvailable,
+                  ]}
+                >
+                  <Text style={styles.badgeText}>{item.status || 'Available'}</Text>
+                </View>
+
+                {/* Action buttons */}
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={styles.btnPrimary}
+                    onPress={() =>
+                      navigation.navigate('ListingDetails', { id: item.id })
+                    }
+                  >
+                    <Text style={styles.btnPrimaryText}>View</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnWarning}
+                    onPress={() =>
+                      navigation.navigate('EditListing', { id: item.id })
+                    }
+                  >
+                    <Text style={styles.btnWarningText}>Edit</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.btnDanger}
+                    onPress={() => handleDelete(item.id)}
+                  >
+                    <Text style={styles.btnDangerText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Mark Sold / Available */}
+                <TouchableOpacity
+                  style={[
+                    styles.statusBtn,
+                    item.status === 'Sold'
+                      ? styles.statusBtnAvailable
+                      : styles.statusBtnSold,
+                  ]}
+                  onPress={() => handleToggleStatus(item)}
+                >
+                  <Text
+                    style={[
+                      styles.statusBtnText,
+                      item.status === 'Sold' && { color: '#198754' },
+                    ]}
+                  >
+                    {item.status === 'Sold' ? 'Mark Available' : 'Mark as Sold'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        />
+      </View>
+
+      {/* Bottom navigation bar */}
+      <BottomNavBar navigation={navigation} active="profile" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#f8f9fa' },
   container: { flex: 1, backgroundColor: '#f8f9fa', padding: 16 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
