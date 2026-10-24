@@ -5,26 +5,61 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  ScrollView,
   Alert,
   ActivityIndicator,
-  ScrollView,
+  Image,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../config';
+import BottomNavBar from '../components/BottomNavBar';
+
+const memberSince = (value) => {
+  if (!value) return '';
+  const d = new Date(String(value).replace(' ', 'T'));
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+};
+
+function Avatar({ uri, initials, size, fontSize }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <View
+      style={[
+        styles.avatar,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}
+    >
+      {uri && !failed ? (
+        <Image
+          source={{ uri }}
+          style={{ width: size, height: size }}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Text style={[styles.avatarText, { fontSize }]}>{initials}</Text>
+      )}
+    </View>
+  );
+}
 
 export default function ProfileScreen({ navigation }) {
-  const [user, setUser] = useState(null);
+  const [userId, setUserId] = useState(0);
+  const [profile, setProfile] = useState(null);
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const [phone, setPhone] = useState('');
+  const [newImage, setNewImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const loadProfile = async () => {
+  const load = async () => {
     setLoading(true);
     try {
       const stored = await AsyncStorage.getItem('user');
@@ -32,29 +67,30 @@ export default function ProfileScreen({ navigation }) {
         navigation.replace('Login');
         return;
       }
-
-      const localUser = JSON.parse(stored);
-      setUser(localUser);
-      setName(localUser.name || '');
-      setSurname(localUser.surname || '');
-      setPhone(localUser.phone || '');
-
-      // Refresh from server
-      const res = await fetch(
-        `${API_BASE_URL}/profile.php?user_id=${localUser.id}`
-      );
-      const data = await res.json();
-
-      if (data.success && data.user) {
-        setUser(data.user);
-        setName(data.user.name || '');
-        setSurname(data.user.surname || '');
-        setPhone(data.user.phone || '');
-        await AsyncStorage.setItem('user', JSON.stringify(data.user));
+      const u = JSON.parse(stored);
+      const uid = Number(u.id || u.user_id);
+      if (!uid) {
+        Alert.alert('Error', 'Could not identify your account. Please log in again.');
+        navigation.replace('Login');
+        return;
       }
+      setUserId(uid);
+
+      const res = await fetch(`${API_BASE_URL}/profile.php?user_id=${uid}`);
+      const data = await res.json();
+      if (!data.success) {
+        Alert.alert('Error', data.message || 'Could not load your profile.');
+        return;
+      }
+
+      const p = data.user;
+      setProfile(p);
+      setName(p.name || '');
+      setSurname(p.surname || '');
+      setPhone(p.phone || '');
+      setNewImage(null);
     } catch (e) {
-      // Keep local data if offline
-      console.log(e);
+      Alert.alert('Error', 'Could not load your profile.');
     } finally {
       setLoading(false);
     }
@@ -62,40 +98,107 @@ export default function ProfileScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      loadProfile();
+      load();
     }, [])
   );
 
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow photo access to change your picture.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.6,
+      base64: true,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    if (!asset.base64) {
+      Alert.alert('Image error', 'Could not read image. Try another photo.');
+      return;
+    }
+    if (asset.base64.length * 0.75 > 2 * 1024 * 1024) {
+      Alert.alert('Too large', 'Profile picture must be smaller than 2MB.');
+      return;
+    }
+
+    const ext = (asset.uri.split('.').pop() || 'jpg').toLowerCase();
+    setNewImage({
+      uri: asset.uri,
+      base64: asset.base64,
+      type: ext === 'png' ? 'image/png' : 'image/jpeg',
+    });
+  };
+
   const handleSave = async () => {
     if (!name.trim() || !surname.trim()) {
-      Alert.alert('Missing info', 'Name and surname are required.');
+      Alert.alert('Missing info', 'Your name and surname are required.');
+      return;
+    }
+    if (phone.trim() !== '' && !/^[0-9]+$/.test(phone.trim())) {
+      Alert.alert('Invalid phone', 'Phone number can only contain numbers.');
       return;
     }
 
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/profile.php`, {
+      const body = {
+        user_id: userId,
+        name: name.trim(),
+        surname: surname.trim(),
+        phone: phone.trim(),
+      };
+      if (newImage?.base64) {
+        body.image_base64 = newImage.base64;
+        body.image_type = newImage.type;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/update_profile.php`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          name: name.trim(),
-          surname: surname.trim(),
-          phone: phone.trim(),
-        }),
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        Alert.alert('Server error', text.slice(0, 400) || `HTTP ${res.status}`);
+        return;
+      }
 
       if (data.success) {
-        setUser(data.user);
-        await AsyncStorage.setItem('user', JSON.stringify(data.user));
-        Alert.alert('Success', 'Your profile was updated successfully.');
+        setProfile(data.user);
+        setNewImage(null);
+
+        // Keep the saved login in sync with the new name
+        try {
+          const stored = await AsyncStorage.getItem('user');
+          if (stored) {
+            const u = JSON.parse(stored);
+            await AsyncStorage.setItem(
+              'user',
+              JSON.stringify({ ...u, name: data.user.name, surname: data.user.surname })
+            );
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        Alert.alert('Saved', data.message || 'Your profile was updated successfully.');
       } else {
-        Alert.alert('Failed', data.message || 'Could not update profile.');
+        Alert.alert('Failed', data.message || 'We could not update your profile.');
       }
     } catch (e) {
-      Alert.alert('Connection error', 'Could not reach the server.');
+      Alert.alert('Connection error', String(e?.message || e));
     } finally {
       setSaving(false);
     }
@@ -109,210 +212,220 @@ export default function ProfileScreen({ navigation }) {
         style: 'destructive',
         onPress: async () => {
           await AsyncStorage.removeItem('user');
-          navigation.replace('Login');
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
         },
       },
     ]);
   };
 
-  if (loading || !user) {
+  if (loading && !profile) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0d6efd" />
+      <View style={styles.screen}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#0d6efd" />
+        </View>
+        <BottomNavBar navigation={navigation} active="profile" />
       </View>
     );
   }
 
   const initials = (
-    (name?.[0] || '') + (surname?.[0] || '')
-  ).toUpperCase() || '?';
-
-  const memberSince = user.created_at
-    ? new Date(user.created_at).toLocaleDateString('en-US', {
-        month: 'long',
-        year: 'numeric',
-      })
-    : '';
+    String(profile?.name || '').charAt(0) + String(profile?.surname || '').charAt(0)
+  ).toUpperCase();
+  const avatarUri = newImage?.uri || profile?.profile_picture || null;
+  const isAdmin = profile?.role === 'admin';
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
+    <View style={styles.screen}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <View style={styles.headerText}>
-            <Text style={styles.headerName}>
-              {`${name} ${surname}`.trim() || 'Student'}
-            </Text>
-            <Text style={styles.headerSub}>Student Marketplace Profile</Text>
-          </View>
-        </View>
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <View style={styles.hero}>
+            <Avatar key={avatarUri || 'none'} uri={avatarUri} initials={initials} size={80} fontSize={26} />
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.heroName} numberOfLines={2}>
+                {`${profile?.name || ''} ${profile?.surname || ''}`.trim()}
+              </Text>
+              <Text style={styles.heroSub}>Student Marketplace Profile</Text>
 
-        {user?.role === 'admin' && (
-            <TouchableOpacity
-                style={styles.linkBtn}
-                onPress={() => navigation.navigate('Admin')}
-            >
-                <Ionicons name="shield-checkmark" size={20} color="#0d6efd" />
-                <Text style={styles.linkBtnText}>Admin Portal</Text>
-                <Ionicons name="chevron-forward" size={10} color="#adb5bd" />
-            </TouchableOpacity>
-            )}
-
-        {/* Form card */}
-        <View style={styles.card}>
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="First name"
-          />
-
-          <Text style={styles.label}>Surname</Text>
-          <TextInput
-            style={styles.input}
-            value={surname}
-            onChangeText={setSurname}
-            placeholder="Surname"
-          />
-
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="e.g. 071 234 5678"
-            keyboardType="phone-pad"
-          />
-
-          <Text style={styles.label}>Student Number</Text>
-          <TextInput
-            style={[styles.input, styles.readonly]}
-            value={user.student_number || ''}
-            editable={false}
-          />
-
-          <Text style={styles.label}>Email Address</Text>
-          <TextInput
-            style={[styles.input, styles.readonly]}
-            value={user.email || ''}
-            editable={false}
-          />
-
-          <View style={styles.footerRow}>
-            <Text style={styles.memberSince}>
-              {memberSince ? `Member since ${memberSince}` : ''}
-            </Text>
-
-            <TouchableOpacity
-              style={[styles.saveBtn, saving && { opacity: 0.7 }]}
-              onPress={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.saveBtnText}>Save Changes</Text>
+              {isAdmin && (
+                <TouchableOpacity
+                  style={styles.adminBtn}
+                  onPress={() => navigation.navigate('Admin')}
+                >
+                  <Ionicons name="shield-checkmark" size={14} color="#212529" />
+                  <Text style={styles.adminBtnText}>Go to Admin Portal</Text>
+                </TouchableOpacity>
               )}
+            </View>
+          </View>
+
+          {/* Form card */}
+          <View style={styles.card}>
+            <Text style={styles.label}>Profile Picture</Text>
+            <View style={styles.pictureRow}>
+              <Avatar key={'big' + (avatarUri || 'none')} uri={avatarUri} initials={initials} size={96} fontSize={30} />
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <TouchableOpacity style={styles.pickBtn} onPress={pickImage}>
+                  <Ionicons name="camera" size={16} color="#0d6efd" />
+                  <Text style={styles.pickBtnText}>
+                    {newImage ? 'Choose a different photo' : 'Change photo'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.hint}>JPG, PNG or WEBP. Maximum size: 2MB.</Text>
+              </View>
+            </View>
+
+            <Text style={styles.label}>Name</Text>
+            <TextInput style={styles.input} value={name} onChangeText={setName} />
+
+            <Text style={styles.label}>Surname</Text>
+            <TextInput style={styles.input} value={surname} onChangeText={setSurname} />
+
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="e.g. 0712345678"
+              placeholderTextColor="#adb5bd"
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.label}>Student Number</Text>
+            <TextInput
+              style={[styles.input, styles.readonly]}
+              value={profile?.student_number || ''}
+              editable={false}
+            />
+
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              style={[styles.input, styles.readonly]}
+              value={profile?.email || ''}
+              editable={false}
+            />
+
+            <View style={styles.footerRow}>
+              <Text style={styles.since}>
+                {memberSince(profile?.created_at)
+                  ? `Member since ${memberSince(profile?.created_at)}`
+                  : ''}
+              </Text>
+              <TouchableOpacity
+                style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+                onPress={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.saveBtnText}>Save Changes</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Shortcuts */}
+          <View style={styles.links}>
+            <TouchableOpacity
+              style={styles.linkBtn}
+              onPress={() => navigation.navigate('MyListings')}
+            >
+              <Ionicons name="pricetags-outline" size={18} color="#0d6efd" />
+              <Text style={styles.linkText}>My Listings</Text>
+              <Ionicons name="chevron-forward" size={18} color="#adb5bd" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.linkBtn} onPress={handleLogout}>
+              <Ionicons name="log-out-outline" size={18} color="#dc3545" />
+              <Text style={[styles.linkText, { color: '#dc3545' }]}>Log out</Text>
+              <Ionicons name="chevron-forward" size={18} color="#adb5bd" />
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-        {/* Quick links */}
-        <TouchableOpacity
-          style={styles.linkBtn}
-          onPress={() => navigation.navigate('MyListings')}
-        >
-          <Ionicons name="list" size={20} color="#0d6efd" />
-          <Text style={styles.linkBtnText}>My Listings</Text>
-          <Ionicons name="chevron-forward" size={20} color="#adb5bd" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.linkBtn, styles.logoutBtn]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#dc3545" />
-          <Text style={[styles.linkBtnText, { color: '#dc3545' }]}>Log out</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <BottomNavBar navigation={navigation} active="profile" />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  header: {
+  screen: { flex: 1, backgroundColor: '#f8f9fa' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  hero: {
     backgroundColor: '#0d6efd',
-    padding: 24,
+    paddingTop: 48,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
     backgroundColor: '#ffc107',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    overflow: 'hidden',
   },
-  avatarText: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#212529',
+  avatarText: { color: '#212529', fontWeight: '800' },
+  heroName: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  heroSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 2 },
+  adminBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#ffc107',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginTop: 10,
   },
-  headerText: {
-    flex: 1,
-  },
-  headerName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#fff',
-  },
-  headerSub: {
-    color: 'rgba(255,255,255,0.75)',
-    marginTop: 4,
-    fontSize: 14,
-  },
+  adminBtnText: { color: '#212529', fontWeight: '700', fontSize: 12 },
+
   card: {
     backgroundColor: '#fff',
-    margin: 16,
     borderRadius: 12,
-    padding: 20,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
   },
   label: {
     fontSize: 13,
     fontWeight: '700',
     color: '#212529',
     marginBottom: 6,
-    marginTop: 10,
+    marginTop: 14,
   },
+  pictureRow: { flexDirection: 'row', alignItems: 'center' },
+  pickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#0d6efd',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  pickBtnText: { color: '#0d6efd', fontWeight: '600', fontSize: 13 },
+  hint: { color: '#6c757d', fontSize: 12, marginTop: 8 },
+
   input: {
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#ced4da',
     borderRadius: 8,
@@ -320,56 +433,45 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: '#212529',
-    backgroundColor: '#fff',
   },
-  readonly: {
-    backgroundColor: '#f1f3f5',
-    color: '#6c757d',
-  },
+  readonly: { backgroundColor: '#e9ecef', color: '#6c757d' },
+
   footerRow: {
-    marginTop: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    marginTop: 20,
+    paddingTop: 14,
   },
-  memberSince: {
-    fontSize: 12,
-    color: '#6c757d',
-    flex: 1,
-    marginRight: 12,
-  },
+  since: { color: '#6c757d', fontSize: 12, flex: 1, marginRight: 8 },
   saveBtn: {
     backgroundColor: '#0d6efd',
     borderRadius: 8,
-    paddingHorizontal: 18,
     paddingVertical: 12,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  saveBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
+  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  links: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    elevation: 2,
+    overflow: 'hidden',
   },
   linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-    elevation: 1,
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f5',
   },
-  linkBtnText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#212529',
-  },
-  logoutBtn: {
-    marginTop: 4,
-  },
+  linkText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#212529' },
 });

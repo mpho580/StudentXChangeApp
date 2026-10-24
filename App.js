@@ -25,7 +25,7 @@ export default function App() {
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
 
         {/* Main app shell (bottom tabs) */}
-        <Stack.Screen name="Home" component={MainTabs} />
+        <Stack.Screen name="Home" component={HomeScreen} />
 
         {/* Extra screens on top of tabs */}
         <Stack.Screen name="ListingDetails" component={ListingDetailsScreen} />
