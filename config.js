@@ -1,1 +1,1 @@
-export const API_BASE_URL = 'http://10.82.210.197/student_marketplace/api';
+export const API_BASE_URL = 'http://10.68.34.197/student_marketplace/api';

@@ -161,26 +161,29 @@ export default function HomeScreen({ navigation }) {
 
       {/* ===== CATEGORIES ===== */}
       <Text style={styles.sectionTitle}>
-        <Ionicons name="grid" size={18} color="#0d6efd" /> Select Campus Category
-      </Text>
+      <Ionicons name="grid" size={18} color="#0d6efd" /> Select Campus Category
+    </Text>
 
-      <View style={styles.categoriesGrid}>
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            style={styles.categoryCard}
-            onPress={() =>
-              navigation.navigate('Search', { category_id: cat.id })
-            }
-            activeOpacity={0.7}
-          >
-            <Ionicons name={cat.icon} size={28} color="#0d6efd" />
-            <Text style={styles.categoryName} numberOfLines={1}>
-              {cat.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+    >
+      {categories.map((cat) => (
+        <TouchableOpacity
+          key={cat.id}
+          style={styles.categoryCardWide}
+          onPress={() => navigation.navigate('Search', { category_id: cat.id })}
+          activeOpacity={0.7}
+        >
+          <Ionicons name={cat.icon} size={28} color="#0d6efd" />
+          <Text style={styles.categoryName} numberOfLines={1}>
+            {cat.name}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+      
 
       {/* ===== RECENT / SEARCH RESULTS HEADER ===== */}
       <View style={styles.listingsHeader}>
@@ -265,6 +268,7 @@ export default function HomeScreen({ navigation }) {
       )}
 
       <View style={{ height: 40 }} />
+      
     </ScrollView>
   );
 }
@@ -367,6 +371,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 12,
     marginBottom: 20,
+    justifyContent: 'space-between',
   },
   categoryCard: {
     width: (width - 48) / 3,
@@ -386,6 +391,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#212529',
+  },
+
+  categoryCardWide: {
+    width: 120,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingVertical: 18,
+    marginHorizontal: 6,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
 
   listingsHeader: {
