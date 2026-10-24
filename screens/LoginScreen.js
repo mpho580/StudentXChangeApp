@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,27 +10,76 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
+
+// Same limits as the website's login form
+const LOGIN_ID_MAX = 100;
+const PASSWORD_MIN = 6;
+const PASSWORD_MAX = 1024;
+
+// The website pages live next to the api folder, e.g. .../student_marketplace/public/
+const WEBSITE_PUBLIC_URL = API_BASE_URL.replace(/\/api\/?$/, '/public');
 
 export default function LoginScreen({ navigation }) {
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Like the website: someone who is already logged in skips the login page
+  useEffect(() => {
+    const checkLoggedIn = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('user');
+        if (stored) {
+          const u = JSON.parse(stored);
+          if (Number(u?.id || u?.user_id)) {
+            navigation.replace('Home');
+          }
+        }
+      } catch (e) {
+        // ignore, just show the form
+      }
+    };
+    checkLoggedIn();
+  }, []);
+
+  const validate = () => {
+    const id = loginId.trim();
+
+    if (!id || !password) {
+      return 'Please fill in both fields.';
+    }
+    if (id.length > LOGIN_ID_MAX) {
+      return `Email or student number must be ${LOGIN_ID_MAX} characters or fewer.`;
+    }
+    if (password.length < PASSWORD_MIN) {
+      return `Password must be at least ${PASSWORD_MIN} characters.`;
+    }
+    if (password.length > PASSWORD_MAX) {
+      return 'Password is too long.';
+    }
+    return '';
+  };
 
   const handleLogin = async () => {
-    if (!loginId.trim() || !password) {
-      Alert.alert('Missing info', 'Please fill in both fields.');
+    const problem = validate();
+    if (problem) {
+      setError(problem);
       return;
     }
 
+    setError('');
     setLoading(true);
 
     try {
       const response = await fetch(`${API_BASE_URL}/login.php`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({
           login_id: loginId.trim(),
           password,
@@ -43,19 +92,23 @@ export default function LoginScreen({ navigation }) {
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         navigation.replace('Home');
       } else {
-        Alert.alert(
-          'Login failed',
+        setError(
           data.message || 'The email/student number or password is incorrect.'
         );
       }
     } catch (err) {
-      Alert.alert(
-        'Connection error',
+      setError(
         'Could not reach the server. Check that XAMPP is running and API_BASE_URL in config.js is correct.'
       );
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleForgotPassword = () => {
+    Linking.openURL(`${WEBSITE_PUBLIC_URL}/forgotPassword.php`).catch(() =>
+      Alert.alert('Error', 'Could not open the password reset page.')
+    );
   };
 
   return (
@@ -68,26 +121,47 @@ export default function LoginScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
       >
         {/* Logo */}
-        <Text style={styles.logo}>
-          Student<Text style={styles.logoAccent}>X</Text>Change
-        </Text>
+        <View style={styles.logoRow}>
+          <Ionicons name="storefront" size={26} color="#f0ad4e" />
+          <Text style={styles.logo}>
+            Student<Text style={styles.logoAccent}>X</Text>Change
+          </Text>
+        </View>
         <Text style={styles.subtitle}>Sign in to your campus account</Text>
 
         {/* Card */}
         <View style={styles.card}>
+          {/* Error banner (same as the website's red alert) */}
+          {error !== '' && (
+            <View style={styles.alert}>
+              <Ionicons name="warning" size={16} color="#842029" style={{ marginRight: 8 }} />
+              <Text style={styles.alertText}>{error}</Text>
+            </View>
+          )}
+
           {/* Email / Student Number */}
           <Text style={styles.label}>Email or student number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Student number"
-            placeholderTextColor="#adb5bd"
-            value={loginId}
-            onChangeText={setLoginId}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            maxLength={100}
-          />
+          <View style={styles.inputGroup}>
+            <View style={styles.inputIcon}>
+              <Ionicons name="mail-outline" size={18} color="#6c757d" />
+            </View>
+            <TextInput
+              style={styles.inputInner}
+              placeholder="student number or email"
+              placeholderTextColor="#adb5bd"
+              value={loginId}
+              onChangeText={(t) => {
+                setLoginId(t);
+                if (error) setError('');
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              autoComplete="username"
+              maxLength={LOGIN_ID_MAX}
+              returnKeyType="next"
+            />
+          </View>
           <Text style={styles.helper}>
             Use your email address or student number.
           </Text>
@@ -96,22 +170,22 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.label}>Password</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your password"
-            placeholderTextColor="#adb5bd"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(t) => {
+              setPassword(t);
+              if (error) setError('');
+            }}
             secureTextEntry
+            autoComplete="current-password"
+            maxLength={PASSWORD_MAX}
+            returnKeyType="go"
+            onSubmitEditing={handleLogin}
           />
 
           {/* Forgot password */}
           <TouchableOpacity
             style={styles.forgotWrap}
-            onPress={() =>
-              Alert.alert(
-                'Forgot password',
-                'Password reset will be available soon. For now, contact support or use the website.'
-              )
-            }
+            onPress={() => navigation.navigate('ForgotPassword')}
           >
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
@@ -125,7 +199,10 @@ export default function LoginScreen({ navigation }) {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Sign in</Text>
+              <View style={styles.buttonInner}>
+                <Ionicons name="log-in-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.buttonText}>Sign in</Text>
+              </View>
             )}
           </TouchableOpacity>
         </View>
@@ -148,6 +225,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     backgroundColor: '#f8f9fa',
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   logo: {
     fontSize: 28,
@@ -177,6 +260,17 @@ const styles = StyleSheet.create({
     elevation: 4,
     marginBottom: 24,
   },
+  alert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8d7da',
+    borderWidth: 1,
+    borderColor: '#f5c2c7',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  alertText: { color: '#842029', fontSize: 13, flex: 1 },
   label: {
     fontSize: 13,
     fontWeight: '700',
@@ -193,6 +287,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#212529',
     marginBottom: 6,
+  },
+  inputGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ced4da',
+    borderRadius: 8,
+    marginBottom: 6,
+    overflow: 'hidden',
+  },
+  inputIcon: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderRightWidth: 1,
+    borderRightColor: '#ced4da',
+  },
+  inputInner: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#212529',
   },
   helper: {
     fontSize: 12,
@@ -215,6 +333,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
+  buttonInner: { flexDirection: 'row', alignItems: 'center' },
   buttonDisabled: {
     opacity: 0.7,
   },

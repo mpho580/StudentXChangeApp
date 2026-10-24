@@ -15,6 +15,14 @@ import { API_BASE_URL } from '../config';
 
 // --- Same rules as website register.php ---
 
+// 9 digits: 402 + (1-6) + 5 digits
+const STUDENT_NUMBER_REGEX = /^402[1-6][0-9]{5}$/;
+// Letters, spaces, apostrophes and hyphens, at least 2 characters
+const NAME_REGEX = /^[a-zA-Z\s'-]{2,}$/;
+// 10 digits starting with 06, 07 or 08
+const PHONE_REGEX = /^0[6-8][0-9]{8}$/;
+const ALLOWED_EMAIL_DOMAIN = '@my.richfield.ac.za';
+
 function isStrongPassword(password) {
   if (password.length < 6) return false;
   if (!/[A-Z]/.test(password)) return false;
@@ -26,22 +34,14 @@ function isStrongPassword(password) {
 
 function isStudentEmail(email) {
   const e = email.trim().toLowerCase();
-  if (!e.includes('@')) return false;
-  return e.endsWith('@my.richfield.ac.za');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false;
+  return e.endsWith(ALLOWED_EMAIL_DOMAIN);
 }
 
 function studentNumberMatchesEmail(studentNumber, email) {
   const cleanNum = String(studentNumber).replace(/[^a-z0-9]/gi, '').toLowerCase();
   const local = email.trim().toLowerCase().split('@')[0] || '';
   return cleanNum !== '' && local.includes(cleanNum);
-}
-
-function isLettersOnly(value) {
-  return /^[a-zA-Z\s'-]+$/.test(value.trim());
-}
-
-function isNumbersOnly(value) {
-  return /^[0-9]+$/.test(value.trim());
 }
 
 export default function RegisterScreen({ navigation }) {
@@ -57,46 +57,66 @@ export default function RegisterScreen({ navigation }) {
 
   const validate = () => {
     const errors = {};
+    const sn = studentNumber.trim();
+    const nm = name.trim();
+    const sur = surname.trim();
+    const em = email.trim();
+    const ph = phone.trim();
 
-    if (!studentNumber.trim()) {
+    // Student number
+    if (!sn) {
       errors.student_number = 'Student number is required.';
-    } else if (!isNumbersOnly(studentNumber)) {
-      errors.student_number = 'Student number can only contain numbers.';
+    } else if (!STUDENT_NUMBER_REGEX.test(sn)) {
+      errors.student_number = 'Invalid Student number.';
     }
 
-    if (!name.trim()) {
+    // Name
+    if (!nm) {
       errors.name = 'Name is required.';
-    } else if (!isLettersOnly(name)) {
+    } else if (!NAME_REGEX.test(nm)) {
       errors.name = 'Name can only contain letters (no numbers).';
     }
 
-    if (!surname.trim()) {
+    // Surname
+    if (!sur) {
       errors.surname = 'Surname is required.';
-    } else if (!isLettersOnly(surname)) {
+    } else if (!NAME_REGEX.test(sur)) {
       errors.surname = 'Surname can only contain letters (no numbers).';
     }
 
-    if (!email.trim()) {
+    // Email
+    if (!em) {
       errors.email = 'Email is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
       errors.email = 'Please enter a valid email address.';
-    } else if (!isStudentEmail(email)) {
-      errors.email = 'Only institutional student emails are allowed (e.g. @my.richfield.ac.za).';
+    } else if (!isStudentEmail(em)) {
+      errors.email =
+        'Only institutional student emails are allowed (e.g. @my.richfield.ac.za).';
+    } else {
+      // The part before the @ must be a valid student number (4021-4026)
+      const localPart = em.split('@')[0];
+      if (!STUDENT_NUMBER_REGEX.test(localPart)) {
+        errors.email = 'Invalid institutional email.';
+      }
     }
 
+    // Student number and email must agree
     if (!errors.student_number && !errors.email) {
-      if (!studentNumberMatchesEmail(studentNumber, email)) {
-        errors.student_number = 'Student number must match the number in your institutional email.';
+      if (!studentNumberMatchesEmail(sn, em)) {
+        errors.student_number =
+          'Student number must match the number in your institutional email.';
         errors.email = 'Your email must contain your student number.';
       }
     }
 
-    if (!phone.trim()) {
+    // Phone
+    if (!ph) {
       errors.phone = 'Cellphone number is required.';
-    } else if (!isNumbersOnly(phone)) {
-      errors.phone = 'Phone number can only contain numbers.';
+    } else if (!PHONE_REGEX.test(ph)) {
+      errors.phone = 'Phone number must be 10 digits';
     }
 
+    // Password
     if (!password) {
       errors.password = 'Password is required.';
     } else if (!isStrongPassword(password)) {
@@ -104,6 +124,7 @@ export default function RegisterScreen({ navigation }) {
         'Must be at least 6 characters and contain 1 uppercase, 1 lowercase, 1 number and 1 special character.';
     }
 
+    // Confirm password
     if (!confirmPassword) {
       errors.confirm_password = 'Please confirm your password.';
     } else if (password !== confirmPassword) {
@@ -188,11 +209,12 @@ export default function RegisterScreen({ navigation }) {
           <Text style={styles.label}>Student Number *</Text>
           <TextInput
             style={inputStyle('student_number')}
-            placeholder="e.g. 21908472"
+            placeholder="Student number"
             placeholderTextColor="#adb5bd"
             value={studentNumber}
-            onChangeText={setStudentNumber}
+            onChangeText={(t) => setStudentNumber(t.replace(/[^0-9]/g, ''))}
             keyboardType="number-pad"
+            maxLength={9}
             autoCapitalize="none"
           />
           {fieldErrors.student_number ? (
@@ -226,7 +248,7 @@ export default function RegisterScreen({ navigation }) {
           <Text style={styles.label}>Institutional Email *</Text>
           <TextInput
             style={inputStyle('email')}
-            placeholder="e.g. 21908472@my.richfield.ac.za"
+            placeholder="Institutional email"
             placeholderTextColor="#adb5bd"
             value={email}
             onChangeText={setEmail}
@@ -243,16 +265,17 @@ export default function RegisterScreen({ navigation }) {
           <Text style={styles.label}>WhatsApp / Phone Number *</Text>
           <TextInput
             style={inputStyle('phone')}
-            placeholder="e.g. 0712345678"
+            placeholder="Phone number"
             placeholderTextColor="#adb5bd"
             value={phone}
-            onChangeText={setPhone}
+            onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
             keyboardType="number-pad"
+            maxLength={10}
           />
           {fieldErrors.phone ? (
             <Text style={styles.errorText}>{fieldErrors.phone}</Text>
           ) : (
-            <Text style={styles.helper}>Numbers only.</Text>
+            <Text style={styles.helper}></Text>
           )}
 
           <Text style={styles.label}>Password *</Text>
