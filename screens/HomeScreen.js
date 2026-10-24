@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { API_BASE_URL } from '../config';
+import BottomNavBar from '../components/BottomNavBar';
 import {
   FALLBACK_CATEGORIES,
   fetchCategories,
@@ -22,6 +23,8 @@ import {
 } from '../utils/categories';
 
 const { width } = Dimensions.get('window');
+const CARD_GAP = 12;
+const CARD_WIDTH = (width - 16 * 2 - CARD_GAP) / 2;
 
 const formatPrice = (price) => `R ${Number(price).toFixed(2)}`;
 
@@ -35,16 +38,22 @@ export default function HomeScreen({ navigation }) {
   const loadUser = async () => {
     try {
       const stored = await AsyncStorage.getItem('user');
-      if (stored) setUser(JSON.parse(stored));
-      else setUser(null);
+      if (stored) {
+        setUser(JSON.parse(stored));
+      } else {
+        setUser(null);
+      }
     } catch (e) {
       console.log(e);
     }
   };
 
   const fetchListings = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/listings.php`);
@@ -81,158 +90,210 @@ export default function HomeScreen({ navigation }) {
 
   const isLoggedIn = !!user;
 
+  // Helper so navigation always reaches the root Stack
+  const openListingDetails = (id) => {
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate('ListingDetails', { id });
+    } else {
+      navigation.navigate('ListingDetails', { id });
+    }
+  };
+
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={['#0d6efd']}
-        />
-      }
-    >
-      {/* ===== HERO ===== */}
-      <View style={styles.hero}>
-        <Ionicons name="flash" size={32} color="#ffc107" style={{ marginBottom: 8 }} />
-        <Text style={styles.heroTitle}>Campus Trading Made Effortless</Text>
-        <Text style={styles.heroSubtitle}>
-          Exchange textbooks, dorm appliances, tech devices, or class notes in a
-          verified student-only network. Safe hand-offs on campus, zero shipping
-          costs, and maximum affordability.
-        </Text>
-
-        <TouchableOpacity
-          style={styles.heroButton}
-          onPress={() =>
-            navigation.navigate(isLoggedIn ? 'CreateListing' : 'Register')
-          }
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name={isLoggedIn ? 'add-circle' : 'person-add'}
-            size={20}
-            color="#000"
-            style={{ marginRight: 8 }}
-          />
-          <Text style={styles.heroButtonText}>
-            {isLoggedIn ? 'Post an Item' : 'Get Registered'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ===== CATEGORIES ===== */}
-      <Text style={styles.sectionTitle}>
-        <Ionicons name="grid" size={18} color="#0d6efd" /> Select Campus Category
-      </Text>
-
+    <View style={styles.screen}>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#0d6efd']}
+          />
+        }
       >
-        {categories.map((cat) => (
+        {/* ===== HERO ===== */}
+        <View style={styles.hero}>
+          <Ionicons
+            name="flash"
+            size={32}
+            color="#ffc107"
+            style={{ marginBottom: 8 }}
+          />
+
+          <Text style={styles.heroTitle}>
+            Campus Trading Made Effortless
+          </Text>
+
+          <Text style={styles.heroSubtitle}>
+            Exchange textbooks, dorm appliances, tech devices, or class notes
+            in a verified student-only network. Safe hand-offs on campus,
+            zero shipping costs, and maximum affordability.
+          </Text>
+
           <TouchableOpacity
-            key={cat.id}
-            style={styles.categoryCardWide}
-            onPress={() => navigation.navigate('Search', { category_id: cat.id })}
-            activeOpacity={0.7}
+            style={styles.heroButton}
+            onPress={() =>
+              navigation.navigate(isLoggedIn ? 'CreateListing' : 'Register')
+            }
+            activeOpacity={0.85}
           >
-            <Ionicons name={iconForCategory(cat.name)} size={28} color="#0d6efd" />
-            <Text style={styles.categoryName} numberOfLines={1}>
-              {cat.name}
+            <Ionicons
+              name={isLoggedIn ? 'add-circle' : 'person-add'}
+              size={20}
+              color="#000"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.heroButtonText}>
+              {isLoggedIn ? 'Post an Item' : 'Get Registered'}
             </Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* ===== RECENT HEADER ===== */}
-      <View style={styles.listingsHeader}>
-        <Text style={[styles.sectionTitle, { marginBottom: 0, marginTop: 0 }]}>
-          <Ionicons name="time" size={18} color="#0d6efd" /> Recently Uploaded Items
-        </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Search')}>
-          <Text style={styles.browseAll}>Browse All</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ===== LISTINGS ===== */}
-      {loading ? (
-        <ActivityIndicator size="large" color="#0d6efd" style={{ marginTop: 40 }} />
-      ) : listings.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="storefront-outline" size={64} color="#adb5bd" />
-          <Text style={styles.emptyText}>
-            No items listed yet. Be the first to start the campus circular economy!
-          </Text>
         </View>
-      ) : (
-        <View style={styles.listingsGrid}>
-          {listings.slice(0, 8).map((item) => (
+
+        {/* ===== CATEGORIES ===== */}
+        <Text style={styles.sectionTitle}>
+          <Ionicons name="grid" size={18} color="#0d6efd" /> Select Campus Category
+        </Text>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 12,
+            paddingBottom: 8,
+          }}
+        >
+          {categories.map((cat) => (
             <TouchableOpacity
-              key={item.id}
-              style={styles.productCard}
+              key={cat.id}
+              style={styles.categoryCardWide}
               onPress={() =>
-                navigation.navigate('ListingDetails', { id: item.id })
+                navigation.navigate('Search', { category_id: cat.id })
               }
-              activeOpacity={0.85}
+              activeOpacity={0.7}
             >
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{item.item_condition}</Text>
-              </View>
-
-              <Image
-                source={{
-                  uri:
-                    item.image_path ||
-                    'https://via.placeholder.com/300x180?text=No+Image',
-                }}
-                style={styles.productImage}
-                resizeMode="cover"
+              <Ionicons
+                name={iconForCategory(cat.name)}
+                size={28}
+                color="#0d6efd"
               />
-
-              <View style={styles.productBody}>
-                <Text style={styles.categoryLabel}>{item.category_name}</Text>
-                <Text style={styles.productTitle} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text style={styles.productDescription} numberOfLines={2}>
-                  {item.description}
-                </Text>
-
-                <View style={styles.priceRow}>
-                  <Text style={styles.price}>{formatPrice(item.price)}</Text>
-                  <View style={styles.viewButton}>
-                    <Text style={styles.viewButtonText}>View Details</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.productFooter}>
-                <Text style={styles.footerText} numberOfLines={1}>
-                  <Ionicons name="person-outline" size={12} /> {item.seller_name}
-                </Text>
-                <Text style={styles.footerText}>
-                  <Ionicons name="calendar-outline" size={12} />{' '}
-                  {new Date(item.created_at).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </Text>
-              </View>
+              <Text style={styles.categoryName} numberOfLines={1}>
+                {cat.name}
+              </Text>
             </TouchableOpacity>
           ))}
-        </View>
-      )}
+        </ScrollView>
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
+        {/* ===== RECENT HEADER ===== */}
+        <View style={styles.listingsHeader}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { marginBottom: 0, marginTop: 0 },
+            ]}
+          >
+            <Ionicons name="time" size={18} color="#0d6efd" /> Recently Uploaded Items
+          </Text>
+
+          <TouchableOpacity onPress={() => navigation.navigate('Search')}>
+            <Text style={styles.browseAll}>Browse All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ===== LISTINGS – 2 COLUMNS ===== */}
+        {loading ? (
+          <ActivityIndicator
+            size="large"
+            color="#0d6efd"
+            style={{ marginTop: 40 }}
+          />
+        ) : listings.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="storefront-outline" size={64} color="#adb5bd" />
+            <Text style={styles.emptyText}>
+              No items listed yet. Be the first to start the campus circular
+              economy!
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.listingsGrid}>
+            {listings.slice(0, 8).map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.productCard}
+                onPress={() => openListingDetails(item.id)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{item.item_condition}</Text>
+                </View>
+
+                <Image
+                  source={{
+                    uri:
+                      item.image_path ||
+                      'https://via.placeholder.com/300x180?text=No+Image',
+                  }}
+                  style={styles.productImage}
+                  resizeMode="cover"
+                />
+
+                <View style={styles.productBody}>
+                  <Text style={styles.categoryLabel}>{item.category_name}</Text>
+
+                  <Text style={styles.productTitle} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+
+                  <Text style={styles.productDescription} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+
+                  <View style={styles.priceRow}>
+                    <Text style={styles.price}>{formatPrice(item.price)}</Text>
+                    <View style={styles.viewButton}>
+                      <Text style={styles.viewButtonText}>View</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.productFooter}>
+                  <Text style={styles.footerText} numberOfLines={1}>
+                    <Ionicons name="person-outline" size={12} /> {item.seller_name}
+                  </Text>
+                  <Text style={styles.footerText}>
+                    <Ionicons name="calendar-outline" size={12} />{' '}
+                    {new Date(item.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Extra space so content is not hidden behind the bottom bar */}
+        <View style={{ height: 90 }} />
+      </ScrollView>
+
+      {/* ===== CUSTOM BOTTOM NAV (with Inbox) ===== */}
+      <BottomNavBar
+        navigation={navigation}
+        active="home"
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -330,16 +391,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
   },
 
+  // ===== 2-COLUMN GRID =====
   listingsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    justifyContent: 'space-between',
   },
   productCard: {
-    width: (width - 40) / 2,
+    width: CARD_WIDTH,
     backgroundColor: '#fff',
     borderRadius: 12,
-    margin: 6,
+    marginBottom: CARD_GAP,
     overflow: 'hidden',
     elevation: 3,
     shadowColor: '#000',

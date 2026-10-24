@@ -61,6 +61,16 @@ export default function MyListingsScreen({ navigation }) {
     }, [])
   );
 
+  // Safe navigation helper (works from nested navigators)
+  const goTo = (route, params) => {
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate(route, params);
+    } else {
+      navigation.navigate(route, params);
+    }
+  };
+
   const handleDelete = (id) => {
     Alert.alert('Delete listing?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -72,11 +82,16 @@ export default function MyListingsScreen({ navigation }) {
             const res = await fetch(`${API_BASE_URL}/delete_listing.php`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id, user_id: user.id }),
+              body: JSON.stringify({
+                id: id,
+                user_id: user.id,
+              }),
             });
+
             const data = await res.json();
+
             if (data.success) {
-              load();
+              load(); // refresh list
             } else {
               Alert.alert('Failed', data.message || 'Could not delete listing.');
             }
@@ -104,7 +119,7 @@ export default function MyListingsScreen({ navigation }) {
       const data = await res.json();
 
       if (data.success) {
-        load(); // refresh list
+        load();
       } else {
         Alert.alert('Failed', data.message || 'Could not update status.');
       }
@@ -135,7 +150,7 @@ export default function MyListingsScreen({ navigation }) {
           </View>
           <TouchableOpacity
             style={styles.addBtn}
-            onPress={() => navigation.navigate('CreateListing')}
+            onPress={() => goTo('CreateListing')}
           >
             <Text style={styles.addBtnText}>+ Sell an item</Text>
           </TouchableOpacity>
@@ -147,7 +162,7 @@ export default function MyListingsScreen({ navigation }) {
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={load} />
           }
-          contentContainerStyle={{ paddingBottom: 16 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
           ListEmptyComponent={
             <View style={styles.emptyCard}>
               <Text style={styles.emptyIcon}>📦</Text>
@@ -157,7 +172,7 @@ export default function MyListingsScreen({ navigation }) {
               </Text>
               <TouchableOpacity
                 style={styles.emptyBtn}
-                onPress={() => navigation.navigate('CreateListing')}
+                onPress={() => goTo('CreateListing')}
               >
                 <Text style={styles.emptyBtnText}>Create your first listing</Text>
               </TouchableOpacity>
@@ -203,18 +218,14 @@ export default function MyListingsScreen({ navigation }) {
                 <View style={styles.actions}>
                   <TouchableOpacity
                     style={styles.btnPrimary}
-                    onPress={() =>
-                      navigation.navigate('ListingDetails', { id: item.id })
-                    }
+                    onPress={() => goTo('ListingDetails', { id: item.id })}
                   >
                     <Text style={styles.btnPrimaryText}>View</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.btnWarning}
-                    onPress={() =>
-                      navigation.navigate('EditListing', { id: item.id })
-                    }
+                    onPress={() => goTo('EditListing', { id: item.id })}
                   >
                     <Text style={styles.btnWarningText}>Edit</Text>
                   </TouchableOpacity>
@@ -252,7 +263,6 @@ export default function MyListingsScreen({ navigation }) {
         />
       </View>
 
-      {/* Bottom navigation bar */}
       <BottomNavBar navigation={navigation} active="profile" />
     </View>
   );

@@ -12,6 +12,26 @@ const ITEMS = [
 
 export default function BottomNavBar({ navigation, active }) {
   const insets = useSafeAreaInsets();
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+
+    const check = async () => {
+      const n = await fetchUnreadCount();
+      if (alive) setUnread(n);
+    };
+
+    check();
+    const timer = setInterval(check, 15000);
+    const unsubscribe = navigation.addListener('focus', check);
+
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      unsubscribe();
+    };
+  }, [navigation]);
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
@@ -21,14 +41,21 @@ export default function BottomNavBar({ navigation, active }) {
           <TouchableOpacity
             key={item.key}
             style={styles.item}
-            onPress={() => navigation.navigate(item.route)}
+            onPress={() => goTo(item.route)}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name={isActive ? item.icon : item.iconOutline}
-              size={24}
-              color={isActive ? '#0d6efd' : '#6c757d'}
-            />
+            <View>
+              <Ionicons
+                name={isActive ? item.icon : item.iconOutline}
+                size={24}
+                color={isActive ? '#0d6efd' : '#6c757d'}
+              />
+              {showBadge && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.label, isActive && styles.labelActive]}>
               {item.label}
             </Text>
