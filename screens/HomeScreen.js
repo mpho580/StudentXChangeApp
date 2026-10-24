@@ -23,6 +23,8 @@ import {
 } from '../utils/categories';
 
 const { width } = Dimensions.get('window');
+const CARD_GAP = 12;
+const CARD_WIDTH = (width - 16 * 2 - CARD_GAP) / 2;
 
 const formatPrice = (price) => `R ${Number(price).toFixed(2)}`;
 
@@ -36,7 +38,6 @@ export default function HomeScreen({ navigation }) {
   const loadUser = async () => {
     try {
       const stored = await AsyncStorage.getItem('user');
-
       if (stored) {
         setUser(JSON.parse(stored));
       } else {
@@ -57,7 +58,6 @@ export default function HomeScreen({ navigation }) {
     try {
       const response = await fetch(`${API_BASE_URL}/listings.php`);
       const data = await response.json();
-
       setListings(data.success ? data.listings || [] : []);
     } catch (err) {
       Alert.alert(
@@ -126,9 +126,7 @@ export default function HomeScreen({ navigation }) {
           <TouchableOpacity
             style={styles.heroButton}
             onPress={() =>
-              navigation.navigate(
-                isLoggedIn ? 'CreateListing' : 'Register'
-              )
+              navigation.navigate(isLoggedIn ? 'CreateListing' : 'Register')
             }
             activeOpacity={0.85}
           >
@@ -138,7 +136,6 @@ export default function HomeScreen({ navigation }) {
               color="#000"
               style={{ marginRight: 8 }}
             />
-
             <Text style={styles.heroButtonText}>
               {isLoggedIn ? 'Post an Item' : 'Get Registered'}
             </Text>
@@ -147,12 +144,7 @@ export default function HomeScreen({ navigation }) {
 
         {/* ===== CATEGORIES ===== */}
         <Text style={styles.sectionTitle}>
-          <Ionicons
-            name="grid"
-            size={18}
-            color="#0d6efd"
-          />{' '}
-          Select Campus Category
+          <Ionicons name="grid" size={18} color="#0d6efd" /> Select Campus Category
         </Text>
 
         <ScrollView
@@ -168,9 +160,7 @@ export default function HomeScreen({ navigation }) {
               key={cat.id}
               style={styles.categoryCardWide}
               onPress={() =>
-                navigation.navigate('Search', {
-                  category_id: cat.id,
-                })
+                navigation.navigate('Search', { category_id: cat.id })
               }
               activeOpacity={0.7}
             >
@@ -179,11 +169,7 @@ export default function HomeScreen({ navigation }) {
                 size={28}
                 color="#0d6efd"
               />
-
-              <Text
-                style={styles.categoryName}
-                numberOfLines={1}
-              >
+              <Text style={styles.categoryName} numberOfLines={1}>
                 {cat.name}
               </Text>
             </TouchableOpacity>
@@ -195,28 +181,18 @@ export default function HomeScreen({ navigation }) {
           <Text
             style={[
               styles.sectionTitle,
-              {
-                marginBottom: 0,
-                marginTop: 0,
-              },
+              { marginBottom: 0, marginTop: 0 },
             ]}
           >
-            <Ionicons
-              name="time"
-              size={18}
-              color="#0d6efd"
-            />{' '}
-            Recently Uploaded Items
+            <Ionicons name="time" size={18} color="#0d6efd" /> Recently Uploaded Items
           </Text>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Search')}
-          >
+          <TouchableOpacity onPress={() => navigation.navigate('Search')}>
             <Text style={styles.browseAll}>Browse All</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ===== LISTINGS ===== */}
+        {/* ===== LISTINGS – 2 COLUMNS ===== */}
         {loading ? (
           <ActivityIndicator
             size="large"
@@ -225,15 +201,10 @@ export default function HomeScreen({ navigation }) {
           />
         ) : listings.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons
-              name="storefront-outline"
-              size={64}
-              color="#adb5bd"
-            />
-
+            <Ionicons name="storefront-outline" size={64} color="#adb5bd" />
             <Text style={styles.emptyText}>
-              No items listed yet. Be the first to start the campus
-              circular economy!
+              No items listed yet. Be the first to start the campus circular
+              economy!
             </Text>
           </View>
         ) : (
@@ -243,16 +214,12 @@ export default function HomeScreen({ navigation }) {
                 key={item.id}
                 style={styles.productCard}
                 onPress={() =>
-                  navigation.navigate('ListingDetails', {
-                    id: item.id,
-                  })
+                  navigation.navigate('ListingDetails', { id: item.id })
                 }
                 activeOpacity={0.85}
               >
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {item.item_condition}
-                  </Text>
+                  <Text style={styles.badgeText}>{item.item_condition}</Text>
                 </View>
 
                 <Image
@@ -266,61 +233,34 @@ export default function HomeScreen({ navigation }) {
                 />
 
                 <View style={styles.productBody}>
-                  <Text style={styles.categoryLabel}>
-                    {item.category_name}
-                  </Text>
+                  <Text style={styles.categoryLabel}>{item.category_name}</Text>
 
-                  <Text
-                    style={styles.productTitle}
-                    numberOfLines={1}
-                  >
+                  <Text style={styles.productTitle} numberOfLines={1}>
                     {item.title}
                   </Text>
 
-                  <Text
-                    style={styles.productDescription}
-                    numberOfLines={2}
-                  >
+                  <Text style={styles.productDescription} numberOfLines={2}>
                     {item.description}
                   </Text>
 
                   <View style={styles.priceRow}>
-                    <Text style={styles.price}>
-                      {formatPrice(item.price)}
-                    </Text>
-
+                    <Text style={styles.price}>{formatPrice(item.price)}</Text>
                     <View style={styles.viewButton}>
-                      <Text style={styles.viewButtonText}>
-                        View Details
-                      </Text>
+                      <Text style={styles.viewButtonText}>View</Text>
                     </View>
                   </View>
                 </View>
 
                 <View style={styles.productFooter}>
-                  <Text
-                    style={styles.footerText}
-                    numberOfLines={1}
-                  >
-                    <Ionicons
-                      name="person-outline"
-                      size={12}
-                    />{' '}
-                    {item.seller_name}
+                  <Text style={styles.footerText} numberOfLines={1}>
+                    <Ionicons name="person-outline" size={12} /> {item.seller_name}
                   </Text>
-
                   <Text style={styles.footerText}>
-                    <Ionicons
-                      name="calendar-outline"
-                      size={12}
-                    />{' '}
-                    {new Date(item.created_at).toLocaleDateString(
-                      'en-US',
-                      {
-                        month: 'short',
-                        day: 'numeric',
-                      }
-                    )}
+                    <Ionicons name="calendar-outline" size={12} />{' '}
+                    {new Date(item.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -328,10 +268,11 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-        <View style={{ height: 40 }} />
+        {/* Extra space so content is not hidden behind the bottom bar */}
+        <View style={{ height: 90 }} />
       </ScrollView>
 
-      {/* ===== BOTTOM NAVIGATION ===== */}
+      {/* ===== CUSTOM BOTTOM NAV (with Inbox) ===== */}
       <BottomNavBar
         navigation={navigation}
         active="home"
@@ -345,7 +286,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -358,7 +298,6 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
   },
-
   heroTitle: {
     fontSize: 24,
     fontWeight: '800',
@@ -366,7 +305,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
-
   heroSubtitle: {
     fontSize: 15,
     color: 'rgba(255,255,255,0.9)',
@@ -374,7 +312,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 20,
   },
-
   heroButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -383,7 +320,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 10,
   },
-
   heroButtonText: {
     fontSize: 16,
     fontWeight: '700',
@@ -409,14 +345,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
   },
-
   categoryName: {
     marginTop: 8,
     fontSize: 13,
@@ -433,7 +365,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 12,
   },
-
   browseAll: {
     color: '#0d6efd',
     fontWeight: '600',
@@ -444,7 +375,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 50,
   },
-
   emptyText: {
     marginTop: 12,
     fontSize: 16,
@@ -453,28 +383,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
   },
 
+  // ===== 2-COLUMN GRID =====
   listingsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    justifyContent: 'space-between',
   },
-
   productCard: {
-    width: (width - 40) / 2,
+    width: CARD_WIDTH,
     backgroundColor: '#fff',
     borderRadius: 12,
-    margin: 6,
+    marginBottom: CARD_GAP,
     overflow: 'hidden',
     elevation: 3,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
   },
-
   badge: {
     position: 'absolute',
     top: 10,
@@ -485,44 +412,37 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     zIndex: 1,
   },
-
   badgeText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#000',
   },
-
   productImage: {
     width: '100%',
     height: 130,
     backgroundColor: '#e9ecef',
   },
-
   productBody: {
     padding: 12,
   },
-
   categoryLabel: {
     fontSize: 12,
     color: '#0d6efd',
     fontWeight: '600',
     marginBottom: 2,
   },
-
   productTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#212529',
     marginBottom: 4,
   },
-
   productDescription: {
     fontSize: 13,
     color: '#6c757d',
     lineHeight: 18,
     marginBottom: 10,
   },
-
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -531,33 +451,28 @@ const styles = StyleSheet.create({
     borderTopColor: '#f1f3f5',
     paddingTop: 10,
   },
-
   price: {
     fontSize: 15,
     fontWeight: '800',
     color: '#198754',
   },
-
   viewButton: {
     backgroundColor: '#0d6efd',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
   },
-
   viewButtonText: {
     color: '#fff',
     fontSize: 11,
     fontWeight: '600',
   },
-
   productFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingBottom: 10,
   },
-
   footerText: {
     fontSize: 11,
     color: '#6c757d',
