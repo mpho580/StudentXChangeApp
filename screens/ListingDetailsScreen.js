@@ -2,238 +2,351 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
-  TouchableOpacity,
   StyleSheet,
-  Alert,
+  ScrollView,
+  Image,
+  TouchableOpacity,
   ActivityIndicator,
-  RefreshControl,
+  Alert,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
-import BottomNavBar from '../components/BottomNavBar';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const { width } = Dimensions.get('window');
 
-// Same idea as the website: "24 Oct 2026 12:26", or a dash when there is no time
-const formatTime = (value) => {
-  if (!value || String(value).startsWith('0000')) return '—';
-  const d = new Date(String(value).replace(' ', 'T'));
-  if (isNaN(d.getTime())) return '—';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
+export default function ListingDetailsScreen({ navigation, route }) {
+  const { id } = route.params || {};
 
-export default function InboxScreen({ navigation }) {
-  const [conversations, setConversations] = useState([]);
+  const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
-  const load = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-
+  const load = async () => {
+    setLoading(true);
     try {
+      // Get current user
       const stored = await AsyncStorage.getItem('user');
-      if (!stored) {
-        navigation.replace('Login');
+      if (stored) {
+        const u = JSON.parse(stored);
+        setCurrentUserId(Number(u.id || u.user_id));
+      }
+
+      if (!id) {
+        Alert.alert('Error', 'No listing ID provided.');
+        navigation.goBack();
         return;
       }
 
-      const u = JSON.parse(stored);
-      const userId = Number(u.id || u.user_id);
-
-      if (!userId) {
-        Alert.alert('Error', 'Could not identify your account. Please log in again.');
-        navigation.replace('Login');
-        return;
-      }
-
-      const res = await fetch(`${API_BASE_URL}/inbox.php?user_id=${userId}`);
+      const res = await fetch(`${API_BASE_URL}/get_listing.php?id=${id}`);
       const data = await res.json();
 
-      if (data.success) {
-        setConversations(data.conversations || []);
+      if (data.success && data.listing) {
+        setListing(data.listing);
       } else {
-        Alert.alert('Error', data.message || 'Could not load your inbox.');
+        Alert.alert('Error', data.message || 'Listing not found.');
+        navigation.goBack();
       }
     } catch (e) {
-      Alert.alert('Error', 'Could not load your inbox.');
+      Alert.alert('Error', 'Could not load listing details.');
+      navigation.goBack();
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [])
+    }, [id])
   );
 
-  const openChat = (chat) => {
+  const handleMessageSeller = () => {
+    if (!listing) return;
+
     navigation.navigate('Chat', {
-      partner_id: Number(chat.partner_id),
-      product_id: Number(chat.product_id),
-      partner_name: chat.partner_name,
-      product_title: chat.product_title,
+      partner_id: Number(listing.user_id),
+      product_id: Number(listing.id),
+      partner_name: listing.seller_name || 'Seller',
+      product_title: listing.title,
     });
   };
 
-  if (loading && conversations.length === 0) {
+  if (loading) {
     return (
-      <View style={styles.screen}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#0d6efd" />
-        </View>
-        <BottomNavBar navigation={navigation} />
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#0d6efd" />
       </View>
     );
   }
 
+  if (!listing) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: '#6c757d' }}>Listing not found</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+          <Text style={{ color: '#0d6efd', fontWeight: '600' }}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const isOwner = currentUserId && Number(listing.user_id) === currentUserId;
+
   return (
     <View style={styles.screen}>
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Ionicons name="chatbubbles" size={26} color="#0d6efd" />
-          <Text style={styles.pageTitle}>Inbox</Text>
-        </View>
-
-        <FlatList
-          data={conversations}
-          keyExtractor={(item) => `${item.partner_id}-${item.product_id}`}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => load(true)}
-              colors={['#0d6efd']}
-            />
-          }
-          contentContainerStyle={{ paddingBottom: 16 }}
-          ListEmptyComponent={
-            <View style={styles.emptyCard}>
-              <Ionicons name="chatbubble-ellipses-outline" size={48} color="#adb5bd" />
-              <Text style={styles.emptyTitle}>No conversations yet</Text>
-              <Text style={styles.emptyText}>
-                You have no conversations yet. Message a seller from any listing to get started.
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={() => navigation.navigate('Search')}
-              >
-                <Text style={styles.emptyBtnText}>Browse listings</Text>
-              </TouchableOpacity>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => openChat(item)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {String(item.partner_name || '?').charAt(0).toUpperCase()}
-                </Text>
-              </View>
-
-              <View style={styles.cardMain}>
-                <Text style={styles.partnerName} numberOfLines={1}>
-                  {item.partner_name}
-                </Text>
-                <Text style={styles.productLine} numberOfLines={1}>
-                  Product: {item.product_title}
-                </Text>
-                <Text style={styles.time}>{formatTime(item.last_message_time)}</Text>
-              </View>
-
-              <View style={styles.openBtn}>
-                <Text style={styles.openBtnText}>Open Chat</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        />
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#212529" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Listing Details
+        </Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <BottomNavBar navigation={navigation} />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Image */}
+        <Image
+          source={{
+            uri:
+              listing.image_path ||
+              'https://via.placeholder.com/600x400?text=No+Image',
+          }}
+          style={styles.image}
+          resizeMode="cover"
+        />
+
+        <View style={styles.content}>
+          {/* Title + Price */}
+          <Text style={styles.title}>{listing.title}</Text>
+          <Text style={styles.price}>R {Number(listing.price).toFixed(2)}</Text>
+
+          {/* Badges */}
+          <View style={styles.badges}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{listing.item_condition || '—'}</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeCategory]}>
+              <Text style={styles.badgeText}>{listing.category_name || '—'}</Text>
+            </View>
+            {listing.status && (
+              <View
+                style={[
+                  styles.badge,
+                  listing.status === 'Sold' ? styles.badgeSold : styles.badgeAvailable,
+                ]}
+              >
+                <Text style={[styles.badgeText, { color: '#fff' }]}>
+                  {listing.status}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Seller */}
+          <View style={styles.sellerRow}>
+            <Ionicons name="person-circle-outline" size={22} color="#0d6efd" />
+            <Text style={styles.sellerText}>
+              Sold by <Text style={{ fontWeight: '700' }}>{listing.seller_name || 'Student'}</Text>
+            </Text>
+          </View>
+
+          {/* Description */}
+          <Text style={styles.sectionLabel}>Description</Text>
+          <Text style={styles.description}>
+            {listing.description || 'No description provided.'}
+          </Text>
+
+          {/* Message button – only show if NOT the owner */}
+          {!isOwner && (
+            <TouchableOpacity
+              style={styles.messageBtn}
+              onPress={handleMessageSeller}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="chatbubble-ellipses" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.messageBtnText}>Message Seller</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Owner actions */}
+          {isOwner && (
+            <View style={styles.ownerActions}>
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => navigation.navigate('EditListing', { id: listing.id })}
+              >
+                <Ionicons name="create-outline" size={18} color="#212529" />
+                <Text style={styles.editBtnText}>Edit Listing</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.myListingsBtn}
+                onPress={() => navigation.navigate('MyListings')}
+              >
+                <Text style={styles.myListingsBtnText}>My Listings</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f8f9fa' },
-  container: { flex: 1, backgroundColor: '#f8f9fa', padding: 16 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  screen: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#212529',
+    flex: 1,
+    textAlign: 'center',
+  },
+
+  image: {
+    width: width,
+    height: 280,
+    backgroundColor: '#e9ecef',
+  },
+
+  content: {
+    padding: 20,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#212529',
+    marginBottom: 6,
+  },
+  price: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#198754',
+    marginBottom: 14,
+  },
+
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 16,
   },
-  pageTitle: { fontSize: 22, fontWeight: '800', color: '#212529' },
+  badge: {
+    backgroundColor: '#fff3cd',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  badgeCategory: {
+    backgroundColor: '#e7f1ff',
+  },
+  badgeAvailable: {
+    backgroundColor: '#198754',
+  },
+  badgeSold: {
+    backgroundColor: '#dc3545',
+  },
+  badgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#212529',
+  },
 
-  card: {
+  sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    marginBottom: 20,
+    gap: 6,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  sellerText: {
+    fontSize: 15,
+    color: '#495057',
+  },
+
+  sectionLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#212529',
+    marginBottom: 8,
+  },
+  description: {
+    fontSize: 15,
+    color: '#495057',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
+
+  messageBtn: {
     backgroundColor: '#0d6efd',
+    borderRadius: 10,
+    paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  avatarText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-
-  cardMain: { flex: 1, marginRight: 8 },
-  partnerName: { fontSize: 16, fontWeight: '700', color: '#212529' },
-  productLine: { fontSize: 13, color: '#6c757d', marginTop: 2 },
-  time: { fontSize: 11, color: '#adb5bd', marginTop: 4 },
-
-  openBtn: {
-    backgroundColor: '#0d6efd',
-    borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+  messageBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
-  openBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
 
-  emptyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 32,
+  ownerActions: {
+    gap: 12,
+  },
+  editBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 40,
-    elevation: 2,
+    justifyContent: 'center',
+    backgroundColor: '#ffc107',
+    borderRadius: 10,
+    paddingVertical: 14,
+    gap: 8,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#212529', marginTop: 12 },
-  emptyText: {
-    textAlign: 'center',
-    color: '#6c757d',
-    marginVertical: 12,
-    lineHeight: 20,
+  editBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#212529',
   },
-  emptyBtn: {
-    backgroundColor: '#0d6efd',
-    borderRadius: 8,
+  myListingsBtn: {
+    alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginTop: 8,
   },
-  emptyBtnText: { color: '#fff', fontWeight: '700' },
+  myListingsBtnText: {
+    color: '#0d6efd',
+    fontWeight: '600',
+    fontSize: 15,
+  },
 });

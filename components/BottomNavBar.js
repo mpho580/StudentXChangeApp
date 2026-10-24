@@ -45,7 +45,7 @@ export default function BottomNavBar({ navigation, active }) {
           <TouchableOpacity
             key={item.key}
             style={styles.item}
-            onPress={() => navigation.navigate(item.route)}
+            onPress={() => goTo(item.route)}
             activeOpacity={0.7}
           >
             <View>

@@ -61,6 +61,16 @@ export default function MyListingsScreen({ navigation }) {
     }, [])
   );
 
+  // Safe navigation helper (works from nested navigators)
+  const goTo = (route, params) => {
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate(route, params);
+    } else {
+      navigation.navigate(route, params);
+    }
+  };
+
   const handleDelete = (id) => {
     Alert.alert('Delete listing?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -72,11 +82,16 @@ export default function MyListingsScreen({ navigation }) {
             const res = await fetch(`${API_BASE_URL}/delete_listing.php`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id, user_id: user.id }),
+              body: JSON.stringify({
+                id: id,
+                user_id: user.id,
+              }),
             });
+
             const data = await res.json();
+
             if (data.success) {
-              load();
+              load(); // refresh list
             } else {
               Alert.alert('Failed', data.message || 'Could not delete listing.');
             }
@@ -90,6 +105,10 @@ export default function MyListingsScreen({ navigation }) {
 
   const handleToggleStatus = async (item) => {
     const newStatus = item.status === 'Sold' ? 'Available' : 'Sold';
+    if (!user?.id) {
+      Alert.alert('Error', 'User not loaded. Please try again.');
+      return;
+    }
 
     try {
       const res = await fetch(`${API_BASE_URL}/update_status.php`, {
@@ -101,17 +120,24 @@ export default function MyListingsScreen({ navigation }) {
           status: newStatus,
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        Alert.alert('Server error', text.slice(0, 300) || `HTTP ${res.status}`);
+        return;
+      }
 
       if (data.success) {
-        load(); // refresh list
+        load(); // refresh the list so the badge updates
       } else {
         Alert.alert('Failed', data.message || 'Could not update status.');
       }
     } catch (e) {
-      Alert.alert('Error', 'Could not update status.');
+      Alert.alert('Error', String(e?.message || e));
     }
-  };
+};
 
   if (loading && listings.length === 0) {
     return (
@@ -135,7 +161,7 @@ export default function MyListingsScreen({ navigation }) {
           </View>
           <TouchableOpacity
             style={styles.addBtn}
-            onPress={() => navigation.navigate('CreateListing')}
+            onPress={() => goTo('CreateListing')}
           >
             <Text style={styles.addBtnText}>+ Sell an item</Text>
           </TouchableOpacity>
@@ -147,7 +173,7 @@ export default function MyListingsScreen({ navigation }) {
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={load} />
           }
-          contentContainerStyle={{ paddingBottom: 16 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
           ListEmptyComponent={
             <View style={styles.emptyCard}>
               <Text style={styles.emptyIcon}>📦</Text>
@@ -157,7 +183,7 @@ export default function MyListingsScreen({ navigation }) {
               </Text>
               <TouchableOpacity
                 style={styles.emptyBtn}
-                onPress={() => navigation.navigate('CreateListing')}
+                onPress={() => goTo('CreateListing')}
               >
                 <Text style={styles.emptyBtnText}>Create your first listing</Text>
               </TouchableOpacity>
@@ -203,18 +229,14 @@ export default function MyListingsScreen({ navigation }) {
                 <View style={styles.actions}>
                   <TouchableOpacity
                     style={styles.btnPrimary}
-                    onPress={() =>
-                      navigation.navigate('ListingDetails', { id: item.id })
-                    }
+                    onPress={() => goTo('ListingDetails', { id: item.id })}
                   >
                     <Text style={styles.btnPrimaryText}>View</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.btnWarning}
-                    onPress={() =>
-                      navigation.navigate('EditListing', { id: item.id })
-                    }
+                    onPress={() => goTo('EditListing', { id: item.id })}
                   >
                     <Text style={styles.btnWarningText}>Edit</Text>
                   </TouchableOpacity>
@@ -252,7 +274,6 @@ export default function MyListingsScreen({ navigation }) {
         />
       </View>
 
-      {/* Bottom navigation bar */}
       <BottomNavBar navigation={navigation} active="profile" />
     </View>
   );

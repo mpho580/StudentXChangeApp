@@ -90,6 +90,16 @@ export default function HomeScreen({ navigation }) {
 
   const isLoggedIn = !!user;
 
+  // Helper so navigation always reaches the root Stack
+  const openListingDetails = (id) => {
+    const parent = navigation.getParent?.();
+    if (parent) {
+      parent.navigate('ListingDetails', { id });
+    } else {
+      navigation.navigate('ListingDetails', { id });
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -213,9 +223,7 @@ export default function HomeScreen({ navigation }) {
               <TouchableOpacity
                 key={item.id}
                 style={styles.productCard}
-                onPress={() =>
-                  navigation.navigate('ListingDetails', { id: item.id })
-                }
+                onPress={() => openListingDetails(item.id)}
                 activeOpacity={0.85}
               >
                 <View style={styles.badge}>
