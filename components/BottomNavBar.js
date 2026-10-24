@@ -16,6 +16,12 @@ export default function BottomNavBar({ navigation, active }) {
   const insets = useSafeAreaInsets();
   const [unread, setUnread] = useState(0);
 
+  const goTo = (item) => {
+    // Already on this screen: nothing to do
+    if (active === item.key) return;
+    navigation.navigate(item.route);
+  };
+
   useEffect(() => {
     let alive = true;
 
@@ -45,7 +51,7 @@ export default function BottomNavBar({ navigation, active }) {
           <TouchableOpacity
             key={item.key}
             style={styles.item}
-            onPress={() => goTo(item.route)}
+            onPress={() => goTo(item)}
             activeOpacity={0.7}
           >
             <View>
