@@ -106,30 +106,7 @@ export default function HomeScreen({ navigation }) {
         />
       }
     >
-      {/* ===== SEARCH BAR ===== */}
-      <View style={styles.searchWrap}>
-        <Ionicons name="search" size={20} color="#6c757d" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search textbooks, laptops, furniture..."
-          placeholderTextColor="#adb5bd"
-          value={search}
-          onChangeText={setSearch}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="close-circle" size={20} color="#adb5bd" />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
-          <Text style={styles.searchBtnText}>Search</Text>
-        </TouchableOpacity>
-      </View>
-
+      
       {/* ===== HERO ===== */}
       <View style={styles.hero}>
         <Ionicons name="flash" size={32} color="#ffc107" style={{ marginBottom: 8 }} />

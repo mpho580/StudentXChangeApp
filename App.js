@@ -13,6 +13,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import AdminScreen from './screens/AdminScreen';
 import InboxScreen from './screens/InboxScreen';
 import ChatScreen from './screens/ChatScreen';
+import EditListingScreen from './screens/EditListingScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -23,6 +24,7 @@ export default function App() {
         {/* Auth */}
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
+    
 
         {/* Main app shell (bottom tabs) */}
         <Stack.Screen name="Home" component={MainTabs} />
@@ -36,6 +38,7 @@ export default function App() {
         <Stack.Screen name="Admin" component={AdminScreen} />
         <Stack.Screen name="Inbox" component={InboxScreen} />
         <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen name="EditListing" component={EditListingScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

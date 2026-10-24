@@ -17,23 +17,30 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { API_BASE_URL } from '../config';
 
+// Exact categories from the website form
 const CATEGORIES = [
   { id: 1, name: 'Textbooks' },
-  { id: 2, name: 'Electronics' },
-  { id: 3, name: 'Apparel' },
-  { id: 4, name: 'Furniture' },
+  { id: 2, name: 'Electronics & Gadgets' },
+  { id: 4, name: 'Apparel & Clothing' },
+  { id: 3, name: 'Dorm Furniture' },
   { id: 5, name: 'Stationery' },
-  { id: 6, name: 'Services' },
+  { id: 8, name: 'Other Services' },
 ];
 
-const CONDITIONS = ['New', 'Like New', 'Good', 'Fair', 'Used'];
+// Exact conditions from the website form
+const CONDITIONS = [
+  { value: 'New', label: 'Brand New' },
+  { value: 'Like New', label: 'Like New (barely used)' },
+  { value: 'Good', label: 'Good (minor scuffs)' },
+  { value: 'Fair', label: 'Fair (used heavily but working)' },
+];
 
 export default function CreateListingScreen({ navigation }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [categoryId, setCategoryId] = useState(1);
-  const [condition, setCondition] = useState('Good');
+  const [condition, setCondition] = useState('');
   const [image, setImage] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -48,7 +55,7 @@ export default function CreateListingScreen({ navigation }) {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.6,
+      quality: 0.7,
       base64: true,
     });
 
@@ -69,14 +76,29 @@ export default function CreateListingScreen({ navigation }) {
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || !description.trim() || !price.trim()) {
-      Alert.alert('Missing info', 'Title, description and price are required.');
+    // Validation – same rules as the PHP form
+    if (!title.trim()) {
+      Alert.alert('Missing info', 'Please enter a listing title.');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Missing info', 'Please enter a detailed description.');
       return;
     }
 
     const priceNum = parseFloat(price);
     if (isNaN(priceNum) || priceNum <= 0) {
-      Alert.alert('Invalid price', 'Enter a valid price.');
+      Alert.alert('Invalid price', 'Please enter a valid selling price.');
+      return;
+    }
+
+    if (!categoryId) {
+      Alert.alert('Missing info', 'Please select a category.');
+      return;
+    }
+
+    if (!condition) {
+      Alert.alert('Missing info', 'Please select the item condition.');
       return;
     }
 
@@ -89,9 +111,16 @@ export default function CreateListingScreen({ navigation }) {
         navigation.navigate('Login');
         return;
       }
-      const user = JSON.parse(stored);
 
-      // JSON only — NO FormData
+      const user = JSON.parse(stored);
+      const userId = Number(user.id || user.user_id);
+
+      if (!userId) {
+        Alert.alert('Error', 'Could not identify your account. Please log in again.');
+        navigation.replace('Login');
+        return;
+      }
+
       const res = await fetch(`${API_BASE_URL}/create_listing.php`, {
         method: 'POST',
         headers: {
@@ -99,7 +128,7 @@ export default function CreateListingScreen({ navigation }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_id: user.id,
+          user_id: userId,
           title: title.trim(),
           description: description.trim(),
           price: priceNum,
@@ -120,11 +149,21 @@ export default function CreateListingScreen({ navigation }) {
       }
 
       if (data.success) {
-        Alert.alert('Listed!', data.message || 'Your item was published.', [
-          { text: 'OK', onPress: () => navigation.navigate('Home') },
-        ]);
+        Alert.alert(
+          'Published!',
+          data.message || 'Product listing published successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Go to My Listings (same idea as the website redirect)
+                navigation.navigate('MyListings');
+              },
+            },
+          ]
+        );
       } else {
-        Alert.alert('Failed', data.message || 'Could not create listing.');
+        Alert.alert('Failed', data.message || 'Failed to upload the product listing.');
       }
     } catch (e) {
       Alert.alert('Connection error', String(e?.message || e));
@@ -140,13 +179,20 @@ export default function CreateListingScreen({ navigation }) {
     >
       <ScrollView
         style={styles.container}
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 50 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.pageTitle}>Post an Item</Text>
-        <Text style={styles.pageSub}>Share what you’re selling with campus</Text>
+        {/* Header – matches website */}
+        <View style={styles.header}>
+          <Ionicons name="pricetag" size={28} color="#f0ad4e" />
+          <Text style={styles.pageTitle}>Publish An Item to Sell</Text>
+        </View>
+        <Text style={styles.pageSub}>
+          Set up a clean listing card for fellow students on campus.
+        </Text>
 
-        <Text style={styles.label}>Item Photo</Text>
+        {/* Photo */}
+        <Text style={styles.label}>Product Picture</Text>
         <TouchableOpacity style={styles.imageBox} onPress={pickImage}>
           {image?.uri ? (
             <Image source={{ uri: image.uri }} style={styles.preview} resizeMode="cover" />
@@ -154,85 +200,124 @@ export default function CreateListingScreen({ navigation }) {
             <View style={styles.placeholder}>
               <Ionicons name="camera" size={36} color="#0d6efd" />
               <Text style={styles.placeholderText}>Tap to add a photo</Text>
+              <Text style={styles.optionalText}>(optional – default image will be used)</Text>
             </View>
           )}
         </TouchableOpacity>
         {image && (
-          <TouchableOpacity onPress={() => setImage(null)}>
+          <TouchableOpacity onPress={() => setImage(null)} style={{ marginTop: 8 }}>
             <Text style={styles.removePhoto}>Remove photo</Text>
           </TouchableOpacity>
         )}
 
-        <Text style={styles.label}>Title *</Text>
+        {/* Title */}
+        <Text style={styles.label}>Listing Title *</Text>
         <TextInput
           style={styles.input}
           value={title}
           onChangeText={setTitle}
-          placeholder="e.g. Calculus textbook"
+          placeholder="e.g. Calculus 101 Pearson Textbook (12th Ed)"
           placeholderTextColor="#adb5bd"
         />
 
-        <Text style={styles.label}>Description *</Text>
+        {/* Price + Category side by side */}
+        <View style={styles.row}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={styles.label}>Selling Price (ZAR) *</Text>
+            <View style={styles.priceRow}>
+              <Text style={styles.currency}>R</Text>
+              <TextInput
+                style={[styles.input, { flex: 1, marginLeft: 0 }]}
+                value={price}
+                onChangeText={setPrice}
+                placeholder="250.00"
+                placeholderTextColor="#adb5bd"
+                keyboardType="decimal-pad"
+              />
+            </View>
+          </View>
+
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={styles.label}>Category *</Text>
+            <View style={styles.chips}>
+              {CATEGORIES.map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[styles.chip, categoryId === c.id && styles.chipActive]}
+                  onPress={() => setCategoryId(c.id)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      categoryId === c.id && styles.chipTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {c.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Condition */}
+        <Text style={styles.label}>Item Condition *</Text>
+        <View style={styles.chips}>
+          {CONDITIONS.map((c) => (
+            <TouchableOpacity
+              key={c.value}
+              style={[styles.chip, condition === c.value && styles.chipActive]}
+              onPress={() => setCondition(c.value)}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  condition === c.value && styles.chipTextActive,
+                ]}
+              >
+                {c.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Description */}
+        <Text style={styles.label}>Detailed Description *</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
           value={description}
           onChangeText={setDescription}
-          placeholder="Condition, meetup spot, etc."
+          placeholder="Mention item state, meeting spot suggestions (e.g. Student Center Benches), or inclusions..."
           placeholderTextColor="#adb5bd"
           multiline
+          numberOfLines={4}
         />
 
-        <Text style={styles.label}>Price (R) *</Text>
-        <TextInput
-          style={styles.input}
-          value={price}
-          onChangeText={setPrice}
-          placeholder="0.00"
-          placeholderTextColor="#adb5bd"
-          keyboardType="decimal-pad"
-        />
+        {/* Buttons */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
 
-        <Text style={styles.label}>Category</Text>
-        <View style={styles.chips}>
-          {CATEGORIES.map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              style={[styles.chip, categoryId === c.id && styles.chipActive]}
-              onPress={() => setCategoryId(c.id)}
-            >
-              <Text style={[styles.chipText, categoryId === c.id && styles.chipTextActive]}>
-                {c.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <TouchableOpacity
+            style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="cloud-upload" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.submitText}>Publish Listing</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.label}>Condition</Text>
-        <View style={styles.chips}>
-          {CONDITIONS.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[styles.chip, condition === c && styles.chipActive]}
-              onPress={() => setCondition(c)}
-            >
-              <Text style={[styles.chipText, condition === c && styles.chipTextActive]}>
-                {c}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={[styles.submitBtn, loading && { opacity: 0.7 }]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitText}>Post Listing</Text>
-          )}
-        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -240,15 +325,24 @@ export default function CreateListingScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   pageTitle: { fontSize: 22, fontWeight: '800', color: '#212529' },
-  pageSub: { color: '#6c757d', marginBottom: 16, marginTop: 4 },
+  pageSub: { color: '#6c757d', marginBottom: 20, fontSize: 14 },
+
   label: {
     fontSize: 13,
     fontWeight: '700',
     color: '#212529',
     marginBottom: 6,
-    marginTop: 12,
+    marginTop: 14,
   },
+
   imageBox: {
     height: 180,
     borderRadius: 12,
@@ -261,7 +355,9 @@ const styles = StyleSheet.create({
   preview: { width: '100%', height: '100%' },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   placeholderText: { marginTop: 8, fontWeight: '600', color: '#0d6efd' },
-  removePhoto: { color: '#dc3545', fontWeight: '600', marginTop: 8 },
+  optionalText: { fontSize: 12, color: '#adb5bd', marginTop: 4 },
+  removePhoto: { color: '#dc3545', fontWeight: '600' },
+
   input: {
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -272,11 +368,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#212529',
   },
-  textArea: { minHeight: 100, textAlignVertical: 'top' },
+  textArea: { minHeight: 110, textAlignVertical: 'top' },
+
+  row: { flexDirection: 'row' },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ced4da',
+    borderRadius: 8,
+    paddingLeft: 12,
+  },
+  currency: { fontSize: 16, fontWeight: '600', color: '#495057', marginRight: 4 },
+
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 20,
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -285,12 +394,29 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#0d6efd', borderColor: '#0d6efd' },
   chipText: { fontSize: 13, fontWeight: '600', color: '#495057' },
   chipTextActive: { color: '#fff' },
+
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 28,
+  },
+  cancelBtn: {
+    borderWidth: 1,
+    borderColor: '#6c757d',
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  cancelText: { color: '#6c757d', fontWeight: '600', fontSize: 15 },
+
   submitBtn: {
     backgroundColor: '#0d6efd',
-    borderRadius: 10,
-    paddingVertical: 16,
+    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 22,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
   },
-  submitText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  submitText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
