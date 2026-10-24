@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -16,26 +15,22 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { API_BASE_URL } from '../config';
+import {
+  FALLBACK_CATEGORIES,
+  fetchCategories,
+  iconForCategory,
+} from '../utils/categories';
 
 const { width } = Dimensions.get('window');
-
-const categories = [
-  { id: 1, name: 'Textbooks', icon: 'book' },
-  { id: 2, name: 'Electronics', icon: 'laptop-outline' },
-  { id: 3, name: 'Apparel', icon: 'pricetag' },
-  { id: 4, name: 'Furniture', icon: 'home' },
-  { id: 5, name: 'Stationery', icon: 'pencil' },
-  { id: 6, name: 'Services', icon: 'briefcase' },
-];
 
 const formatPrice = (price) => `R ${Number(price).toFixed(2)}`;
 
 export default function HomeScreen({ navigation }) {
   const [listings, setListings] = useState([]);
+  const [categories, setCategories] = useState(FALLBACK_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState(null);
-  const [search, setSearch] = useState('');
 
   const loadUser = async () => {
     try {
@@ -47,23 +42,14 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const fetchListings = async (isRefresh = false, query = search) => {
+  const fetchListings = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const url = query.trim()
-        ? `${API_BASE_URL}/listings.php?search=${encodeURIComponent(query.trim())}`
-        : `${API_BASE_URL}/listings.php`;
-
-      const response = await fetch(url);
+      const response = await fetch(`${API_BASE_URL}/listings.php`);
       const data = await response.json();
-
-      if (data.success) {
-        setListings(data.listings || []);
-      } else {
-        setListings([]);
-      }
+      setListings(data.success ? data.listings || [] : []);
     } catch (err) {
       Alert.alert(
         'Connection error',
@@ -75,20 +61,22 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  const loadCategories = async () => {
+    const list = await fetchCategories();
+    setCategories(list);
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadUser();
+      loadCategories();
       fetchListings();
     }, [])
   );
 
-  const handleSearch = () => {
-    fetchListings(false, search);
-  };
-
-  const clearSearch = () => {
-    setSearch('');
-    fetchListings(false, '');
+  const onRefresh = () => {
+    loadCategories();
+    fetchListings(true);
   };
 
   const isLoggedIn = !!user;
@@ -101,35 +89,11 @@ export default function HomeScreen({ navigation }) {
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => fetchListings(true)}
+          onRefresh={onRefresh}
           colors={['#0d6efd']}
         />
       }
     >
-      {/* ===== SEARCH BAR ===== */}
-      <View style={styles.searchWrap}>
-        <Ionicons name="search" size={20} color="#6c757d" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search textbooks, laptops, furniture..."
-          placeholderTextColor="#adb5bd"
-          value={search}
-          onChangeText={setSearch}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={clearSearch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="close-circle" size={20} color="#adb5bd" />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
-          <Text style={styles.searchBtnText}>Search</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* ===== HERO ===== */}
       <View style={styles.hero}>
         <Ionicons name="flash" size={32} color="#ffc107" style={{ marginBottom: 8 }} />
@@ -164,29 +128,30 @@ export default function HomeScreen({ navigation }) {
         <Ionicons name="grid" size={18} color="#0d6efd" /> Select Campus Category
       </Text>
 
-      <View style={styles.categoriesGrid}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8 }}
+      >
         {categories.map((cat) => (
           <TouchableOpacity
             key={cat.id}
-            style={styles.categoryCard}
-            onPress={() =>
-              navigation.navigate('Search', { category_id: cat.id })
-            }
+            style={styles.categoryCardWide}
+            onPress={() => navigation.navigate('Search', { category_id: cat.id })}
             activeOpacity={0.7}
           >
-            <Ionicons name={cat.icon} size={28} color="#0d6efd" />
+            <Ionicons name={iconForCategory(cat.name)} size={28} color="#0d6efd" />
             <Text style={styles.categoryName} numberOfLines={1}>
               {cat.name}
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
-      {/* ===== RECENT / SEARCH RESULTS HEADER ===== */}
+      {/* ===== RECENT HEADER ===== */}
       <View style={styles.listingsHeader}>
         <Text style={[styles.sectionTitle, { marginBottom: 0, marginTop: 0 }]}>
-          <Ionicons name="time" size={18} color="#0d6efd" />{' '}
-          {search.trim() ? 'Search Results' : 'Recently Uploaded Items'}
+          <Ionicons name="time" size={18} color="#0d6efd" /> Recently Uploaded Items
         </Text>
         <TouchableOpacity onPress={() => navigation.navigate('Search')}>
           <Text style={styles.browseAll}>Browse All</Text>
@@ -200,9 +165,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.emptyState}>
           <Ionicons name="storefront-outline" size={64} color="#adb5bd" />
           <Text style={styles.emptyText}>
-            {search.trim()
-              ? `No results for "${search.trim()}". Try another search.`
-              : 'No items listed yet. Be the first to start the campus circular economy!'}
+            No items listed yet. Be the first to start the campus circular economy!
           </Text>
         </View>
       ) : (
@@ -275,49 +238,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
 
-  // Search bar
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    paddingLeft: 12,
-    paddingRight: 6,
-    paddingVertical: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#212529',
-    paddingVertical: 10,
-  },
-  searchBtn: {
-    backgroundColor: '#0d6efd',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginLeft: 8,
-  },
-  searchBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-
-  // Hero
   hero: {
     backgroundColor: '#0d6efd',
     margin: 16,
@@ -362,18 +282,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 12,
-    marginBottom: 20,
-  },
-  categoryCard: {
-    width: (width - 48) / 3,
+  categoryCardWide: {
+    width: 120,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 18,
-    margin: 6,
+    paddingHorizontal: 6,
+    marginHorizontal: 6,
     alignItems: 'center',
     elevation: 2,
     shadowColor: '#000',
@@ -386,6 +301,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#212529',
+    textAlign: 'center',
   },
 
   listingsHeader: {
@@ -394,6 +310,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 12,
+    marginTop: 12,
   },
   browseAll: {
     color: '#0d6efd',

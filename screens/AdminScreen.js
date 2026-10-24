@@ -44,9 +44,9 @@ export default function AdminScreen({ navigation }) {
       }
 
       const [statsRes, usersRes, productsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/admin_stats.php`).then((r) => r.json()),
-        fetch(`${API_BASE_URL}/admin_users.php`).then((r) => r.json()),
-        fetch(`${API_BASE_URL}/admin_products.php`).then((r) => r.json()),
+        fetch(`${API_BASE_URL}/admin.php?action=stats`).then((r) => r.json()),
+        fetch(`${API_BASE_URL}/admin.php?action=users`).then((r) => r.json()),
+        fetch(`${API_BASE_URL}/admin.php?action=products`).then((r) => r.json()),
       ]);
 
       if (statsRes.success) setStats(statsRes.stats);

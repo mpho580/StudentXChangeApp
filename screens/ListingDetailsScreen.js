@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, Image, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Alert,
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 
 export default function ListingDetailsScreen({ route, navigation }) {
@@ -20,6 +27,26 @@ export default function ListingDetailsScreen({ route, navigation }) {
       .catch(() => Alert.alert('Connection error', 'Could not load listing.'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const handleMessageSeller = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('user');
+      if (!stored) {
+        Alert.alert('Login required', 'Please sign in to message the seller.');
+        navigation.navigate('Login');
+        return;
+      }
+
+      navigation.navigate('Chat', {
+        partner_id: item.user_id ?? item.seller_id,
+        partner_name: item.seller_name || 'Seller',
+        product_id: item.id,
+        product_title: item.title || '',
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Could not open chat.');
+    }
+  };
 
   if (loading) {
     return (
@@ -40,7 +67,11 @@ export default function ListingDetailsScreen({ route, navigation }) {
   return (
     <ScrollView style={styles.container}>
       <Image
-        source={{ uri: item.image_path || 'https://via.placeholder.com/400x250?text=No+Image' }}
+        source={{
+          uri:
+            item.image_path ||
+            'https://via.placeholder.com/400x250?text=No+Image',
+        }}
         style={styles.image}
       />
       <View style={styles.body}>
@@ -51,11 +82,8 @@ export default function ListingDetailsScreen({ route, navigation }) {
         <Text style={styles.desc}>{item.description}</Text>
         <Text style={styles.seller}>Seller: {item.seller_name}</Text>
 
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => Alert.alert('Coming soon', 'Messaging will be added next.')}
-        >
-          <Text style={styles.buttonText}>Message Seller</Text>
+        <TouchableOpacity style={styles.messageBtn} onPress={handleMessageSeller}>
+          <Text style={styles.messageBtnText}>Message Seller</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -65,20 +93,28 @@ export default function ListingDetailsScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  image: { width: '100%', height: 250 },
+  image: { width: '100%', height: 250, backgroundColor: '#e9ecef' },
   body: { padding: 20 },
   badge: {
-    alignSelf: 'flex-start', backgroundColor: '#ffc107',
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
-    fontWeight: '700', marginBottom: 8, overflow: 'hidden',
+    alignSelf: 'flex-start',
+    backgroundColor: '#ffc107',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    fontWeight: '700',
+    marginBottom: 8,
+    overflow: 'hidden',
   },
   category: { color: '#0d6efd', fontWeight: '600', marginBottom: 4 },
   title: { fontSize: 22, fontWeight: '800', color: '#212529', marginBottom: 8 },
   price: { fontSize: 24, fontWeight: '800', color: '#198754', marginBottom: 12 },
   desc: { fontSize: 15, color: '#495057', lineHeight: 22, marginBottom: 16 },
   seller: { fontSize: 14, color: '#6c757d', marginBottom: 20 },
-  button: {
-    backgroundColor: '#0d6efd', borderRadius: 8, padding: 14, alignItems: 'center',
+  messageBtn: {
+    backgroundColor: '#0d6efd',
+    borderRadius: 8,
+    padding: 14,
+    alignItems: 'center',
   },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  messageBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });
